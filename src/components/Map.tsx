@@ -7,6 +7,7 @@ import "mapbox-gl/dist/mapbox-gl.css";
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
 
 const INDIA_ISO_CODE = "IN";
+const UNFADED_ISO_CODES = ["IN", "NP", "BT"];
 
 export default function Map() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -19,7 +20,7 @@ export default function Map() {
       container: containerRef.current,
       style: "mapbox://styles/mapbox/standard",
       center: [78.9629, 22.5937],
-      zoom: 3.5,
+      zoom: 2.4,
     });
     mapRef.current = map;
 
@@ -37,10 +38,11 @@ export default function Map() {
         url: "mapbox://mapbox.country-boundaries-v1",
       });
 
-      // Fade every country except India by overlaying a semi-opaque
-      // fill on everything else and leaving India's opacity at 0.
-      // The worldview filter picks the India-claimed polygon (including
-      // J&K/Ladakh) so the fade mask lines up with the basemap borders.
+      // Fade every country except India, Nepal, and Bhutan by overlaying
+      // a semi-opaque fill on everything else and leaving their opacity
+      // at 0. The worldview filter picks the India-claimed polygon
+      // (including J&K/Ladakh) so the fade mask lines up with the
+      // basemap borders.
       map.addLayer({
         id: "country-fade",
         type: "fill",
@@ -56,7 +58,7 @@ export default function Map() {
           "fill-opacity": [
             "match",
             ["get", "iso_3166_1"],
-            INDIA_ISO_CODE,
+            UNFADED_ISO_CODES,
             0,
             0.75,
           ],
