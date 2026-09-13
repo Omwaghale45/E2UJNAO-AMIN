@@ -87,6 +87,7 @@ export default function Map() {
     const map = new mapboxgl.Map({
       container: containerRef.current,
       style: "mapbox://styles/mapbox/standard-satellite",
+      projection: "globe",
       center: [78.9629, 22.5937],
       zoom: 2.4,
     });
@@ -98,6 +99,17 @@ export default function Map() {
       // Render disputed borders (Jammu & Kashmir, Ladakh, Aksai Chin)
       // per India's worldview so they show as part of India.
       map.setConfigProperty("basemap", "worldview", INDIA_ISO_CODE);
+
+      // Atmosphere for the globe, plus 3D terrain elevation so the
+      // Himalayan/Western Ghats landslide zones read as real relief.
+      map.setFog({});
+      map.addSource("mapbox-dem", {
+        type: "raster-dem",
+        url: "mapbox://mapbox.mapbox-terrain-dem-v1",
+        tileSize: 512,
+        maxzoom: 14,
+      });
+      map.setTerrain({ source: "mapbox-dem", exaggeration: 1.5 });
     });
 
     map.on("load", () => {
