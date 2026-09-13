@@ -25,6 +25,44 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+.ndrf-marker {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: 26px;
+  height: 34px;
+  cursor: pointer;
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.35));
+}
+
+.ndrf-marker svg {
+  position: relative;
+  z-index: 1;
+}
+
+.ndrf-marker-pulse {
+  position: absolute;
+  bottom: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: currentColor;
+  color: inherit;
+  animation: ndrf-pulse 1.8s ease-out infinite;
+}
+
+@keyframes ndrf-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(3.2);
+    opacity: 0;
+  }
+}
+
 .mapboxgl-popup-content {
   border-radius: 10px;
   padding: 10px 12px;
