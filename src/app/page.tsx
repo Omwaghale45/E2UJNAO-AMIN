@@ -20,18 +20,16 @@ export default function Home() {
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden">
-      <Header
-        onSelectArea={handleSelectFromSearch}
-        activeFilter={activeFilter}
-        onFilterChange={setActiveFilter}
-      />
+      <Header onSelectArea={handleSelectFromSearch} />
       <div className="flex flex-1 overflow-hidden">
         <DetailSidebar selected={selected} onClose={() => setSelected(null)} />
         <div className="relative flex-1">
           <Map
             flyToTarget={flyToTarget}
             activeFilter={activeFilter}
+            onFilterChange={setActiveFilter}
             onSelectItem={setSelected}
+            onClearSelection={() => setSelected(null)}
           />
         </div>
       </div>

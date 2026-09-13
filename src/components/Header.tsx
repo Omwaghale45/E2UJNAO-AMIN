@@ -1,12 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CircleHelp, Languages, Menu, Search } from "lucide-react";
-import {
-  getHazardEvents,
-  type HazardEvent,
-  type MapFilter,
-} from "@/data/hazards";
+import { CircleHelp, Languages, Search } from "lucide-react";
+import { getHazardEvents, type HazardEvent } from "@/data/hazards";
 
 const LOGO_LETTERS: { char: string; color: string }[] = [
   { char: "N", color: "#4285F4" },
@@ -15,27 +11,13 @@ const LOGO_LETTERS: { char: string; color: string }[] = [
   { char: "F", color: "#34A853" },
 ];
 
-const FILTER_OPTIONS: { id: MapFilter; label: string }[] = [
-  { id: "flash-flood", label: "Flash Flood" },
-  { id: "landslide", label: "Landslide" },
-  { id: "device-location", label: "Device Location" },
-  { id: "all", label: "All" },
-];
-
 interface HeaderProps {
   onSelectArea: (event: HazardEvent) => void;
-  activeFilter: MapFilter;
-  onFilterChange: (filter: MapFilter) => void;
 }
 
-export default function Header({
-  onSelectArea,
-  activeFilter,
-  onFilterChange,
-}: HeaderProps) {
+export default function Header({ onSelectArea }: HeaderProps) {
   const [query, setQuery] = useState("");
   const [isFocused, setIsFocused] = useState(false);
-  const [filterOpen, setFilterOpen] = useState(false);
 
   const suggestions = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -58,52 +40,7 @@ export default function Header({
 
   return (
     <header className="flex h-[50px] w-full shrink-0 items-center gap-3 border-b-2 border-zinc-200 bg-white px-4">
-      <div className="relative shrink-0">
-        <button
-          type="button"
-          aria-label="Filters"
-          onClick={() => setFilterOpen((open) => !open)}
-          className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-600 hover:bg-zinc-100"
-        >
-          <Menu size={18} />
-        </button>
-
-        {filterOpen && (
-          <div className="absolute left-0 top-full z-20 mt-2 w-56 rounded-2xl border border-zinc-200 bg-white p-3 shadow-lg">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-sm font-medium text-zinc-700">Show</span>
-              <button
-                type="button"
-                onClick={() => setFilterOpen(false)}
-                className="flex h-[29px] w-[55px] items-center justify-center rounded-full bg-zinc-100 text-xs font-medium text-zinc-600 hover:bg-zinc-200"
-              >
-                Close
-              </button>
-            </div>
-            <div className="flex flex-col gap-1">
-              {FILTER_OPTIONS.map(({ id, label }) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => {
-                    onFilterChange(id);
-                    setFilterOpen(false);
-                  }}
-                  className={`rounded-lg px-3 py-2 text-left text-sm ${
-                    activeFilter === id
-                      ? "bg-blue-50 text-blue-700"
-                      : "text-zinc-600 hover:bg-zinc-50"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="flex shrink-0 items-baseline gap-1.5">
+      <div className="flex shrink-0 items-baseline gap-3">
         <span className="text-lg font-semibold tracking-tight">
           {LOGO_LETTERS.map(({ char, color }, i) => (
             <span key={i} style={{ color }}>

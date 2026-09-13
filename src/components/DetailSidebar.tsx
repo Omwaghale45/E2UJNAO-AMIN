@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Antenna, MapPin, TriangleAlert, X } from "lucide-react";
 import type { SelectedItem } from "@/types/selection";
 import type { HazardEvent, MonitoringStation } from "@/data/hazards";
@@ -10,6 +10,9 @@ import {
   SEVERITY_COLOR,
   formatTriggerLabel,
 } from "@/lib/hazard-display";
+import TrendChart from "@/components/TrendChart";
+import FlashFloodPanel from "@/components/FlashFloodPanel";
+import LandslidePanel from "@/components/LandslidePanel";
 
 interface DetailSidebarProps {
   selected: SelectedItem | null;
@@ -18,7 +21,7 @@ interface DetailSidebarProps {
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-start justify-between gap-4">
+    <div className="flex items-start justify-between gap-3">
       <dt className="text-zinc-500">{label}</dt>
       <dd className="text-right font-medium text-zinc-800">{value}</dd>
     </div>
@@ -32,6 +35,7 @@ function SidebarShell({
   district,
   state,
   badge,
+  chart,
   hazardLabel,
   hazards,
   rows,
@@ -43,23 +47,24 @@ function SidebarShell({
   district: string;
   state: string;
   badge: ReactNode;
+  chart: ReactNode;
   hazardLabel: string;
   hazards: string[];
   rows: ReactNode;
   onClose: () => void;
 }) {
   return (
-    <div className="flex h-full w-full max-w-[380px] shrink-0 flex-col overflow-y-auto border-r border-zinc-200 bg-white shadow-xl">
-      <div className="flex items-start justify-between gap-3 border-b border-zinc-100 p-4">
-        <div className="flex items-start gap-2">
+    <div className="flex h-full w-[250px] flex-col overflow-y-auto">
+      <div className="flex items-start justify-between gap-2 border-b border-zinc-100 p-3">
+        <div className="flex items-start gap-1.5">
           {icon === "station" ? (
-            <Antenna size={20} style={{ color: accentColor }} className="mt-0.5 shrink-0" />
+            <Antenna size={16} style={{ color: accentColor }} className="mt-0.5 shrink-0" />
           ) : (
-            <MapPin size={20} style={{ color: accentColor }} className="mt-0.5 shrink-0" />
+            <MapPin size={16} style={{ color: accentColor }} className="mt-0.5 shrink-0" />
           )}
           <div>
-            <h2 className="text-base font-semibold text-zinc-900">{title}</h2>
-            <p className="text-xs text-zinc-500">
+            <h2 className="text-sm font-semibold leading-tight text-zinc-900">{title}</h2>
+            <p className="text-[10px] text-zinc-500">
               {district}, {state}
             </p>
           </div>
@@ -68,25 +73,27 @@ function SidebarShell({
           type="button"
           aria-label="Close"
           onClick={onClose}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-500 hover:bg-zinc-100"
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-zinc-500 hover:bg-zinc-100"
         >
-          <X size={18} />
+          <X size={15} />
         </button>
       </div>
 
-      <div className="flex-1 p-4">
-        <div className="mb-4">{badge}</div>
+      <div className="flex-1 p-3">
+        <div className="mb-3">{badge}</div>
 
-        <div className="mb-4">
-          <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-            <TriangleAlert size={13} />
+        {chart}
+
+        <div className="mb-3">
+          <h3 className="mb-1.5 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+            <TriangleAlert size={11} />
             {hazardLabel}
           </h3>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-1">
             {hazards.map((hazard) => (
               <span
                 key={hazard}
-                className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-700"
+                className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-700"
               >
                 {formatTriggerLabel(hazard)}
               </span>
@@ -94,16 +101,34 @@ function SidebarShell({
           </div>
         </div>
 
-        <dl className="space-y-3 border-t border-zinc-100 pt-4 text-sm">{rows}</dl>
+        <dl className="space-y-2 border-t border-zinc-100 pt-3 text-[11px]">{rows}</dl>
       </div>
 
-      <div className="border-t border-zinc-100 p-4 text-[11px] text-zinc-400">
+      <div className="border-t border-zinc-100 p-3 text-[9px] leading-snug text-zinc-400">
         Information shown is for situational awareness only. Verify with
         official NDRF or state disaster management authorities before
         acting.
       </div>
     </div>
   );
+}
+
+function computeHazardBaseline(event: HazardEvent): number {
+  if (event.severity === "EXTREME") return 88;
+  if (event.severity === "CRITICAL") return 74;
+  if (event.severity === "HIGH") return 58;
+  if (event.fatalities) return Math.min(85, 30 + Math.log2(event.fatalities + 1) * 8);
+  return 35;
+}
+
+// Flash-flood events (both historical and migrated risk-zone entries)
+// always carry "flood" in their type string; landslide events never do.
+function isFlashFloodEvent(event: HazardEvent): boolean {
+  return event.type.toLowerCase().includes("flood");
+}
+
+function isLandslideEvent(event: HazardEvent): boolean {
+  return event.type.toLowerCase().includes("landslide") || event.type.toLowerCase().includes("slide");
 }
 
 function HazardDetail({
@@ -115,15 +140,24 @@ function HazardDetail({
 }) {
   const badge = event.severity ? (
     <span
-      className="rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white"
+      className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white"
       style={{ backgroundColor: SEVERITY_COLOR[event.severity] }}
     >
       {event.severity} risk
     </span>
   ) : (
-    <span className="rounded-full bg-stone-500 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
+    <span className="rounded-full bg-stone-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
       Historical event
     </span>
+  );
+
+  const baseline = computeHazardBaseline(event);
+  const chart = isFlashFloodEvent(event) ? (
+    <FlashFloodPanel seed={event.id} baselineRisk={baseline} />
+  ) : isLandslideEvent(event) ? (
+    <LandslidePanel seed={event.id} baselineRisk={baseline} />
+  ) : (
+    <TrendChart seed={event.id} baseline={baseline} />
   );
 
   return (
@@ -134,6 +168,7 @@ function HazardDetail({
       district={event.district}
       state={event.state}
       badge={badge}
+      chart={chart}
       hazardLabel="Risk factors"
       hazards={event.trigger}
       onClose={onClose}
@@ -171,10 +206,11 @@ function StationDetail({
       district={station.district}
       state={station.state}
       badge={
-        <span className="rounded-full bg-blue-600 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
+        <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
           Monitoring Station
         </span>
       }
+      chart={<TrendChart seed={station.id} baseline={45} />}
       hazardLabel="Monitored hazards"
       hazards={station.hazard}
       onClose={onClose}
@@ -193,11 +229,50 @@ function StationDetail({
   );
 }
 
-export default function DetailSidebar({ selected, onClose }: DetailSidebarProps) {
-  if (!selected) return null;
+const TRANSITION_MS = 300;
 
-  if (selected.kind === "station") {
-    return <StationDetail station={selected.data} onClose={onClose} />;
+export default function DetailSidebar({ selected, onClose }: DetailSidebarProps) {
+  // Keep rendering the last-selected content while the panel slides
+  // shut, instead of clearing it instantly — the width transition
+  // below is what actually animates; this just keeps content in
+  // place for the duration of that animation rather than popping out.
+  const [displayed, setDisplayed] = useState<SelectedItem | null>(selected);
+  const [prevSelected, setPrevSelected] = useState<SelectedItem | null>(selected);
+
+  // A new (non-null) selection should show immediately — adjusting
+  // state during render (React's documented pattern for this) instead
+  // of an effect, since it must happen before this paint, not after.
+  if (selected !== prevSelected) {
+    setPrevSelected(selected);
+    if (selected) {
+      setDisplayed(selected);
+    }
   }
-  return <HazardDetail event={selected.data} onClose={onClose} />;
+
+  // Closing (selected -> null) instead waits for the slide-shut
+  // animation before clearing content, so the panel doesn't go blank
+  // mid-transition.
+  useEffect(() => {
+    if (selected) return;
+    const timeout = setTimeout(() => setDisplayed(null), TRANSITION_MS);
+    return () => clearTimeout(timeout);
+  }, [selected]);
+
+  const isOpen = selected !== null;
+
+  return (
+    <div
+      className={`h-full shrink-0 overflow-hidden border-zinc-200 bg-white shadow-xl transition-all ease-in-out ${
+        isOpen ? "w-[250px] border-r" : "w-0 border-r-0"
+      }`}
+      style={{ transitionDuration: `${TRANSITION_MS}ms` }}
+    >
+      {displayed &&
+        (displayed.kind === "station" ? (
+          <StationDetail station={displayed.data} onClose={onClose} />
+        ) : (
+          <HazardDetail event={displayed.data} onClose={onClose} />
+        ))}
+    </div>
+  );
 }

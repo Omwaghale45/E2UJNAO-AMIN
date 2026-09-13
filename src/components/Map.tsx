@@ -5,7 +5,7 @@ import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { hexGrid, collect } from "@turf/turf";
 import type { Feature, FeatureCollection, Point, Polygon } from "geojson";
-import { Layers, LocateFixed, Minus, Plus } from "lucide-react";
+import { Check, Layers, LocateFixed, Minus, Plus, X } from "lucide-react";
 import {
   deviceStations,
   getHazardEvents,
@@ -37,12 +37,19 @@ const SEARCH_RESULT_ZOOM = 10;
 type MapStyleId = "standard" | "satellite";
 
 const MAP_STYLES: Record<MapStyleId, { label: string; url: string }> = {
-  standard: { label: "Standard", url: "mapbox://styles/mapbox/standard" },
+  standard: { label: "Map", url: "mapbox://styles/mapbox/standard" },
   satellite: {
-    label: "Satellite",
+    label: "Hybrid",
     url: "mapbox://styles/mapbox/standard-satellite",
   },
 };
+
+const FILTER_OPTIONS: { id: MapFilter; label: string }[] = [
+  { id: "flash-flood", label: "Flash Flood" },
+  { id: "landslide", label: "Landslide" },
+  { id: "device-location", label: "Device Location" },
+  { id: "all", label: "All" },
+];
 
 const SEVERITY_WEIGHT: Record<Severity, number> = {
   EXTREME: 3,
@@ -361,24 +368,35 @@ function applyFilter(map: mapboxgl.Map, filter: MapFilter) {
 interface MapProps {
   flyToTarget?: HazardEvent | null;
   activeFilter: MapFilter;
+  onFilterChange?: (filter: MapFilter) => void;
   onSelectItem?: (item: SelectedItem) => void;
+  onClearSelection?: () => void;
 }
 
-export default function Map({ flyToTarget, activeFilter, onSelectItem }: MapProps) {
+export default function Map({
+  flyToTarget,
+  activeFilter,
+  onFilterChange,
+  onSelectItem,
+  onClearSelection,
+}: MapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
-  const [layersOpen, setLayersOpen] = useState(false);
+  const [viewOptionsOpen, setViewOptionsOpen] = useState(false);
   const [activeStyle, setActiveStyle] = useState<MapStyleId>("standard");
   // Read inside style.load (which can fire again after a style switch)
   // instead of closing over the activeFilter prop, so a style change
   // mid-filter-selection still rebuilds with the current filter.
   const activeFilterRef = useRef<MapFilter>(activeFilter);
   // Click handlers are registered once on mount; read the latest
-  // onSelectItem through a ref instead of closing over a stale prop.
+  // onSelectItem/onClearSelection through refs instead of closing over
+  // stale props.
   const onSelectItemRef = useRef(onSelectItem);
+  const onClearSelectionRef = useRef(onClearSelection);
   useEffect(() => {
     onSelectItemRef.current = onSelectItem;
-  }, [onSelectItem]);
+    onClearSelectionRef.current = onClearSelection;
+  }, [onSelectItem, onClearSelection]);
 
   // Keep the Mapbox canvas in sync when its container is resized (e.g.
   // the detail sidebar opening/closing shrinks or grows the map area).
@@ -450,6 +468,24 @@ export default function Map({ flyToTarget, activeFilter, onSelectItem }: MapProp
       map.getCanvas().style.cursor = "";
     });
 
+    // Closes the detail sidebar when clicking anywhere on the map that
+    // isn't a selectable point/square (the layer-specific handlers
+    // above still fire for an actual hit and open the new selection).
+    map.on("click", (e) => {
+      const selectableLayers = [
+        "risk-points-circle",
+        "device-stations-square",
+      ].filter((id) => map.getLayer(id));
+      if (selectableLayers.length === 0) return;
+
+      const hits = map.queryRenderedFeatures(e.point, {
+        layers: selectableLayers,
+      });
+      if (hits.length === 0) {
+        onClearSelectionRef.current?.();
+      }
+    });
+
     return () => {
       map.remove();
       mapRef.current = null;
@@ -480,7 +516,6 @@ export default function Map({ flyToTarget, activeFilter, onSelectItem }: MapProp
   function handleStyleChange(id: MapStyleId) {
     setActiveStyle(id);
     mapRef.current?.setStyle(MAP_STYLES[id].url);
-    setLayersOpen(false);
   }
 
   function handleLocate() {
@@ -500,44 +535,73 @@ export default function Map({ flyToTarget, activeFilter, onSelectItem }: MapProp
       <div ref={containerRef} className="h-full w-full" />
 
       <div className="absolute right-4 top-4">
-        <button
-          type="button"
-          aria-label="Layers"
-          onClick={() => setLayersOpen((open) => !open)}
-          className="flex h-[40px] w-[40px] items-center justify-center rounded-2xl border border-zinc-200 bg-white text-zinc-700 shadow-md hover:bg-zinc-50"
-        >
-          <Layers size={18} />
-        </button>
-
-        {layersOpen && (
-          <div className="absolute right-0 top-[48px] w-56 rounded-2xl border border-zinc-200 bg-white p-3 shadow-lg">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-sm font-medium text-zinc-700">
-                Map style
-              </span>
+        {!viewOptionsOpen ? (
+          <button
+            type="button"
+            aria-label="View options"
+            onClick={() => setViewOptionsOpen(true)}
+            className="flex h-[40px] w-[40px] items-center justify-center rounded-2xl border border-zinc-200 bg-white text-zinc-700 shadow-md hover:bg-zinc-50"
+          >
+            <Layers size={18} />
+          </button>
+        ) : (
+          <div className="w-[210px] rounded-2xl border border-zinc-200 bg-white p-3 shadow-lg">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Layers size={15} className="text-zinc-700" />
+                <span className="text-sm font-semibold text-zinc-800">
+                  View options
+                </span>
+              </div>
               <button
                 type="button"
-                onClick={() => setLayersOpen(false)}
-                className="flex h-[29px] w-[55px] items-center justify-center rounded-full bg-zinc-100 text-xs font-medium text-zinc-600 hover:bg-zinc-200"
+                aria-label="Close"
+                onClick={() => setViewOptionsOpen(false)}
+                className="flex h-6 w-6 items-center justify-center rounded-full text-zinc-500 hover:bg-zinc-100"
               >
-                Close
+                <X size={15} />
               </button>
             </div>
-            <div className="flex flex-col gap-1">
+
+            <div className="mb-3 flex rounded-full border border-zinc-200 bg-zinc-50 p-0.5">
               {(Object.keys(MAP_STYLES) as MapStyleId[]).map((id) => (
                 <button
                   key={id}
                   type="button"
                   onClick={() => handleStyleChange(id)}
-                  className={`rounded-lg px-3 py-2 text-left text-sm ${
+                  className={`flex flex-1 items-center justify-center gap-1 rounded-full px-2 py-1.5 text-xs font-medium ${
                     activeStyle === id
-                      ? "bg-blue-50 text-blue-700"
-                      : "text-zinc-600 hover:bg-zinc-50"
+                      ? "bg-blue-100 text-blue-700"
+                      : "text-zinc-600 hover:bg-zinc-100"
                   }`}
                 >
+                  {activeStyle === id && <Check size={12} />}
                   {MAP_STYLES[id].label}
                 </button>
               ))}
+            </div>
+
+            <div className="border-t border-zinc-100 pt-3">
+              <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+                Show
+              </span>
+              <div className="flex flex-col gap-1">
+                {FILTER_OPTIONS.map(({ id, label }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => onFilterChange?.(id)}
+                    className={`flex items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm ${
+                      activeFilter === id
+                        ? "bg-blue-50 text-blue-700"
+                        : "text-zinc-600 hover:bg-zinc-50"
+                    }`}
+                  >
+                    {label}
+                    {activeFilter === id && <Check size={14} />}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}

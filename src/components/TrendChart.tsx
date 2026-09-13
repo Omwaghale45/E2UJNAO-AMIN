@@ -9,32 +9,11 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { createSeededRandom } from "@/lib/seeded-random";
 
 const WARNING = 60;
 const DANGER = 75;
 const EXTREME = 90;
-
-// Deterministic PRNG so the same location always renders the same
-// trend (no real sensor time-series exists — see the sidebar's
-// disclaimer), rather than a new random shape on every render.
-function mulberry32(seed: number) {
-  let state = seed | 0;
-  return function random() {
-    state = (state + 0x6d2b79f5) | 0;
-    let t = Math.imul(state ^ (state >>> 15), 1 | state);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function hashString(value: string): number {
-  let hash = 0;
-  for (let i = 0; i < value.length; i++) {
-    hash = (hash << 5) - hash + value.charCodeAt(i);
-    hash |= 0;
-  }
-  return hash;
-}
 
 function lastNDayLabels(n: number): string[] {
   const labels: string[] = [];
@@ -48,7 +27,7 @@ function lastNDayLabels(n: number): string[] {
 }
 
 function buildSeries(seed: string, baseline: number) {
-  const random = mulberry32(hashString(seed));
+  const random = createSeededRandom(seed);
   let value = baseline;
   return lastNDayLabels(8).map((day) => {
     value += (random() - 0.5) * 5;
@@ -66,7 +45,11 @@ export default function TrendChart({ seed, baseline }: TrendChartProps) {
   const data = buildSeries(seed, baseline);
 
   return (
-    <div>
+    <div className="mb-3 border-b border-zinc-100 pb-3">
+      <p className="mb-1 text-[9px] italic text-zinc-400">
+        Indicative trend — synthetic, not live sensor data
+      </p>
+
       <div className="h-[130px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
