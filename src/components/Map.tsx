@@ -5,12 +5,12 @@ import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { hexGrid, collect } from "@turf/turf";
 import type { Feature, FeatureCollection, Point, Polygon } from "geojson";
-import { Check, Layers, LocateFixed, Minus, Plus, X } from "lucide-react";
+import { Check, Hexagon, Layers, LocateFixed, Minus, Plus, X } from "lucide-react";
 import {
   deviceStations,
-  getHazardEvents,
+  flashFloodEvents,
+  landslideEvents,
   type HazardEvent,
-  type MapFilter,
   type MonitoringStation,
   type Severity,
 } from "@/data/hazards";
@@ -44,11 +44,24 @@ const MAP_STYLES: Record<MapStyleId, { label: string; url: string }> = {
   },
 };
 
-const FILTER_OPTIONS: { id: MapFilter; label: string }[] = [
-  { id: "flash-flood", label: "Flash Flood" },
-  { id: "landslide", label: "Landslide" },
-  { id: "device-location", label: "Device Location" },
-  { id: "all", label: "All" },
+// Each category is independently toggleable — no "All" state; on load
+// every category defaults on.
+export interface CategoryVisibility {
+  flashFlood: boolean;
+  landslide: boolean;
+  devices: boolean;
+}
+
+export const DEFAULT_VISIBILITY: CategoryVisibility = {
+  flashFlood: true,
+  landslide: true,
+  devices: true,
+};
+
+const CATEGORY_TOGGLES: { key: keyof CategoryVisibility; label: string }[] = [
+  { key: "flashFlood", label: "Flash Flood" },
+  { key: "landslide", label: "Landslide" },
+  { key: "devices", label: "Device Location" },
 ];
 
 const SEVERITY_WEIGHT: Record<Severity, number> = {
@@ -106,11 +119,19 @@ function buildDeviceStationsGeoJson(): FeatureCollection<
   };
 }
 
-// Only hazard events (landslide/flash-flood) filter this way — device
-// stations are an unrelated dataset swapped in/out separately.
-function hazardEventsForFilter(filter: MapFilter): HazardEvent[] {
-  return filter === "device-location" ? [] : getHazardEvents(filter);
+function visibleHazardEvents(visibility: CategoryVisibility): HazardEvent[] {
+  const events: HazardEvent[] = [];
+  if (visibility.flashFlood) events.push(...flashFloodEvents);
+  if (visibility.landslide) events.push(...landslideEvents);
+  return events;
 }
+
+const RISK_LEGEND_ITEMS: { label: string; color: string }[] = [
+  { label: "Extreme", color: SEVERITY_COLOR.EXTREME },
+  { label: "Danger", color: SEVERITY_COLOR.CRITICAL },
+  { label: "Warning", color: SEVERITY_COLOR.HIGH },
+  { label: "Historical", color: DEFAULT_COLOR },
+];
 
 function buildRiskPointsGeoJson(
   events: HazardEvent[]
@@ -178,11 +199,17 @@ function buildRiskHexbinGeoJson(
   return { type: "FeatureCollection", features };
 }
 
-function addRiskLayers(map: mapboxgl.Map, filter: MapFilter) {
-  const events = hazardEventsForFilter(filter);
-  const hazardsVisible = filter !== "device-location";
-  const devicesVisible = filter === "all" || filter === "device-location";
-  const deviceMinzoom = filter === "device-location" ? 0 : HEX_TO_POINT_ZOOM;
+// A category is "device-only" when it's the sole enabled layer — in
+// that case devices show at every zoom (no hexbin exists for them to
+// hand off to), matching how the old exclusive filter behaved.
+function deviceMinzoomFor(visibility: CategoryVisibility): number {
+  const deviceOnly =
+    visibility.devices && !visibility.flashFlood && !visibility.landslide;
+  return deviceOnly ? 0 : HEX_TO_POINT_ZOOM;
+}
+
+function addRiskLayers(map: mapboxgl.Map, visibility: CategoryVisibility) {
+  const events = visibleHazardEvents(visibility);
 
   map.addSource("country-boundaries", {
     type: "vector",
@@ -217,6 +244,8 @@ function addRiskLayers(map: mapboxgl.Map, filter: MapFilter) {
   });
 
   // Zoomed out: aggregated hexbin showing where risk concentrates.
+  // Left "visible" unconditionally — an empty/disabled category just
+  // means an empty source, which naturally renders nothing.
   map.addSource("risk-hexbin", {
     type: "geojson",
     data: buildRiskHexbinGeoJson(events),
@@ -227,9 +256,6 @@ function addRiskLayers(map: mapboxgl.Map, filter: MapFilter) {
     type: "fill",
     source: "risk-hexbin",
     maxzoom: HEX_TO_POINT_ZOOM,
-    layout: {
-      visibility: hazardsVisible ? "visible" : "none",
-    },
     paint: {
       "fill-color": [
         "interpolate",
@@ -260,9 +286,6 @@ function addRiskLayers(map: mapboxgl.Map, filter: MapFilter) {
     type: "circle",
     source: "risk-points",
     minzoom: HEX_TO_POINT_ZOOM,
-    layout: {
-      visibility: hazardsVisible ? "visible" : "none",
-    },
     paint: {
       "circle-radius": [
         "interpolate",
@@ -291,8 +314,8 @@ function addRiskLayers(map: mapboxgl.Map, filter: MapFilter) {
     },
   });
 
-  // Monitoring stations: same zoom range as risk points, but a square
-  // marker (vs. circles) since they're infrastructure, not hazards.
+  // Monitoring stations: a square marker (vs. circles) since they're
+  // infrastructure, not hazards.
   if (!map.hasImage(DEVICE_ICON_ID)) {
     map.addImage(
       DEVICE_ICON_ID,
@@ -309,7 +332,7 @@ function addRiskLayers(map: mapboxgl.Map, filter: MapFilter) {
     id: "device-stations-square",
     type: "symbol",
     source: "device-stations",
-    minzoom: deviceMinzoom,
+    minzoom: deviceMinzoomFor(visibility),
     layout: {
       "icon-image": DEVICE_ICON_ID,
       "icon-size": [
@@ -324,17 +347,16 @@ function addRiskLayers(map: mapboxgl.Map, filter: MapFilter) {
         1,
       ],
       "icon-allow-overlap": true,
-      visibility: devicesVisible ? "visible" : "none",
+      visibility: visibility.devices ? "visible" : "none",
     },
   });
 }
 
-// Called on filter changes after the layers already exist (a style
-// switch instead re-runs addRiskLayers from scratch on "style.load").
-function applyFilter(map: mapboxgl.Map, filter: MapFilter) {
-  const events = hazardEventsForFilter(filter);
-  const hazardsVisible = filter !== "device-location";
-  const devicesVisible = filter === "all" || filter === "device-location";
+// Called on visibility changes after the layers already exist (a
+// style switch instead re-runs addRiskLayers from scratch on
+// "style.load").
+function applyVisibility(map: mapboxgl.Map, visibility: CategoryVisibility) {
+  const events = visibleHazardEvents(visibility);
 
   (map.getSource("risk-points") as mapboxgl.GeoJSONSource).setData(
     buildRiskPointsGeoJson(events)
@@ -344,50 +366,43 @@ function applyFilter(map: mapboxgl.Map, filter: MapFilter) {
   );
 
   map.setLayoutProperty(
-    "risk-points-circle",
-    "visibility",
-    hazardsVisible ? "visible" : "none"
-  );
-  map.setLayoutProperty(
-    "risk-hexbin-fill",
-    "visibility",
-    hazardsVisible ? "visible" : "none"
-  );
-  map.setLayoutProperty(
     "device-stations-square",
     "visibility",
-    devicesVisible ? "visible" : "none"
+    visibility.devices ? "visible" : "none"
   );
   map.setLayerZoomRange(
     "device-stations-square",
-    filter === "device-location" ? 0 : HEX_TO_POINT_ZOOM,
+    deviceMinzoomFor(visibility),
     24
   );
 }
 
 interface MapProps {
   flyToTarget?: HazardEvent | null;
-  activeFilter: MapFilter;
-  onFilterChange?: (filter: MapFilter) => void;
+  visibility: CategoryVisibility;
+  onVisibilityChange?: (next: CategoryVisibility) => void;
   onSelectItem?: (item: SelectedItem) => void;
   onClearSelection?: () => void;
 }
 
 export default function Map({
   flyToTarget,
-  activeFilter,
-  onFilterChange,
+  visibility,
+  onVisibilityChange,
   onSelectItem,
   onClearSelection,
 }: MapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
-  const [viewOptionsOpen, setViewOptionsOpen] = useState(false);
+  const [viewOptionsOpen, setViewOptionsOpen] = useState(true);
   const [activeStyle, setActiveStyle] = useState<MapStyleId>("standard");
+  // Whether the map is currently showing individual points (true) or
+  // the aggregated hexbin (false) — drives the legend's icon shape.
+  const [isPointView, setIsPointView] = useState(2.4 >= HEX_TO_POINT_ZOOM);
   // Read inside style.load (which can fire again after a style switch)
-  // instead of closing over the activeFilter prop, so a style change
-  // mid-filter-selection still rebuilds with the current filter.
-  const activeFilterRef = useRef<MapFilter>(activeFilter);
+  // instead of closing over the visibility prop, so a style change
+  // mid-toggle still rebuilds with the current visibility.
+  const visibilityRef = useRef<CategoryVisibility>(visibility);
   // Click handlers are registered once on mount; read the latest
   // onSelectItem/onClearSelection through refs instead of closing over
   // stale props.
@@ -426,7 +441,15 @@ export default function Map({
       // Render disputed borders (Jammu & Kashmir, Ladakh, Aksai Chin)
       // per India's worldview so they show as part of India.
       map.setConfigProperty("basemap", "worldview", INDIA_ISO_CODE);
-      addRiskLayers(map, activeFilterRef.current);
+      addRiskLayers(map, visibilityRef.current);
+    });
+
+    // Only updates state when crossing the hex/point threshold (not on
+    // every zoom tick) so the legend doesn't re-render continuously
+    // while the user is mid-gesture.
+    map.on("zoom", () => {
+      const nowPointView = map.getZoom() >= HEX_TO_POINT_ZOOM;
+      setIsPointView((prev) => (prev === nowPointView ? prev : nowPointView));
     });
 
     // Registered once: these keep working across style switches since
@@ -439,7 +462,7 @@ export default function Map({
       const uid = feature?.properties?.__uid;
       if (typeof uid !== "number") return;
 
-      const event = hazardEventsForFilter(activeFilterRef.current)[uid];
+      const event = visibleHazardEvents(visibilityRef.current)[uid];
       if (!event) return;
       onSelectItemRef.current?.({ kind: "hazard", data: event });
     });
@@ -493,15 +516,15 @@ export default function Map({
   }, []);
 
   useEffect(() => {
-    activeFilterRef.current = activeFilter;
+    visibilityRef.current = visibility;
 
     const map = mapRef.current;
     // Skip if the layers haven't been added yet (initial style.load
-    // will pick up the current filter via the ref above instead).
+    // will pick up the current visibility via the ref above instead).
     if (!map || !map.getSource("risk-points")) return;
 
-    applyFilter(map, activeFilter);
-  }, [activeFilter]);
+    applyVisibility(map, visibility);
+  }, [visibility]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -530,6 +553,10 @@ export default function Map({
     });
   }
 
+  function toggleCategory(key: keyof CategoryVisibility) {
+    onVisibilityChange?.({ ...visibility, [key]: !visibility[key] });
+  }
+
   return (
     <div className="relative h-full w-full">
       <div ref={containerRef} className="h-full w-full" />
@@ -545,11 +572,11 @@ export default function Map({
             <Layers size={18} />
           </button>
         ) : (
-          <div className="w-[210px] rounded-2xl border border-zinc-200 bg-white p-3 shadow-lg">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <Layers size={15} className="text-zinc-700" />
-                <span className="text-sm font-semibold text-zinc-800">
+          <div className="flex max-h-[calc(50%-16px)] w-[210px] flex-col rounded-2xl border border-zinc-200 bg-white shadow-lg">
+            <div className="flex shrink-0 items-center justify-between gap-1.5 border-b border-zinc-100 p-2">
+              <div className="flex items-center gap-1">
+                <Layers size={13} className="text-zinc-700" />
+                <span className="text-xs font-semibold text-zinc-800">
                   View options
                 </span>
               </div>
@@ -557,50 +584,83 @@ export default function Map({
                 type="button"
                 aria-label="Close"
                 onClick={() => setViewOptionsOpen(false)}
-                className="flex h-6 w-6 items-center justify-center rounded-full text-zinc-500 hover:bg-zinc-100"
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-zinc-500 hover:bg-zinc-100"
               >
-                <X size={15} />
+                <X size={13} />
               </button>
             </div>
 
-            <div className="mb-3 flex rounded-full border border-zinc-200 bg-zinc-50 p-0.5">
-              {(Object.keys(MAP_STYLES) as MapStyleId[]).map((id) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => handleStyleChange(id)}
-                  className={`flex flex-1 items-center justify-center gap-1 rounded-full px-2 py-1.5 text-xs font-medium ${
-                    activeStyle === id
-                      ? "bg-blue-100 text-blue-700"
-                      : "text-zinc-600 hover:bg-zinc-100"
-                  }`}
-                >
-                  {activeStyle === id && <Check size={12} />}
-                  {MAP_STYLES[id].label}
-                </button>
-              ))}
-            </div>
-
-            <div className="border-t border-zinc-100 pt-3">
-              <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
-                Show
-              </span>
-              <div className="flex flex-col gap-1">
-                {FILTER_OPTIONS.map(({ id, label }) => (
+            <div className="overflow-x-hidden overflow-y-auto p-2 [scrollbar-width:thin]">
+              <div className="mb-2 flex rounded-full border border-zinc-200 bg-zinc-50 p-0.5">
+                {(Object.keys(MAP_STYLES) as MapStyleId[]).map((id) => (
                   <button
                     key={id}
                     type="button"
-                    onClick={() => onFilterChange?.(id)}
-                    className={`flex items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm ${
-                      activeFilter === id
-                        ? "bg-blue-50 text-blue-700"
-                        : "text-zinc-600 hover:bg-zinc-50"
+                    onClick={() => handleStyleChange(id)}
+                    className={`flex flex-1 items-center justify-center gap-1 rounded-full px-1.5 py-1 text-[10px] font-medium ${
+                      activeStyle === id
+                        ? "bg-blue-100 text-blue-700"
+                        : "text-zinc-600 hover:bg-zinc-100"
                     }`}
                   >
-                    {label}
-                    {activeFilter === id && <Check size={14} />}
+                    {activeStyle === id && <Check size={10} />}
+                    {MAP_STYLES[id].label}
                   </button>
                 ))}
+              </div>
+
+              <div className="border-t border-zinc-100 pt-2">
+                <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
+                  Show
+                </span>
+                <div className="flex flex-col gap-1">
+                  {CATEGORY_TOGGLES.map(({ key, label }) => (
+                    <button
+                      key={key}
+                      type="button"
+                      aria-pressed={visibility[key]}
+                      onClick={() => toggleCategory(key)}
+                      className={`flex items-center justify-between rounded-lg px-2 py-1.5 text-left text-[11px] ${
+                        visibility[key]
+                          ? "bg-blue-50 text-blue-700"
+                          : "text-zinc-500 hover:bg-zinc-50"
+                      }`}
+                    >
+                      {label}
+                      {visibility[key] && <Check size={12} />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-2 border-t border-zinc-100 pt-2">
+                <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
+                  Risk level
+                </span>
+                <div className="flex flex-col gap-1">
+                  {RISK_LEGEND_ITEMS.map(({ label, color }) =>
+                    isPointView ? (
+                      <div key={label} className="flex items-center gap-1.5 text-[10px] text-zinc-600">
+                        <span
+                          className="h-2.5 w-2.5 shrink-0 rounded-full border border-white shadow-sm"
+                          style={{ backgroundColor: color }}
+                        />
+                        {label}
+                      </div>
+                    ) : (
+                      <div key={label} className="flex items-center gap-1.5 text-[10px] text-zinc-600">
+                        <Hexagon
+                          size={11}
+                          className="shrink-0"
+                          style={{ color }}
+                          fill={color}
+                          fillOpacity={0.2}
+                        />
+                        {label}
+                      </div>
+                    )
+                  )}
+                </div>
               </div>
             </div>
           </div>

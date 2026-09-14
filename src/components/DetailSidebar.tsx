@@ -13,6 +13,7 @@ import {
 import TrendChart from "@/components/TrendChart";
 import FlashFloodPanel from "@/components/FlashFloodPanel";
 import LandslidePanel from "@/components/LandslidePanel";
+import AlertButton from "@/components/AlertButton";
 
 interface DetailSidebarProps {
   selected: SelectedItem | null;
@@ -39,6 +40,7 @@ function SidebarShell({
   hazardLabel,
   hazards,
   rows,
+  footer,
   onClose,
 }: {
   icon: "station" | "hazard";
@@ -51,6 +53,7 @@ function SidebarShell({
   hazardLabel: string;
   hazards: string[];
   rows: ReactNode;
+  footer?: ReactNode;
   onClose: () => void;
 }) {
   return (
@@ -108,6 +111,7 @@ function SidebarShell({
         Information shown is for situational awareness only. Verify with
         official NDRF or state disaster management authorities before
         acting.
+        {footer}
       </div>
     </div>
   );
@@ -171,6 +175,7 @@ function HazardDetail({
       chart={chart}
       hazardLabel="Risk factors"
       hazards={event.trigger}
+      footer={<AlertButton event={event} />}
       onClose={onClose}
       rows={
         <>

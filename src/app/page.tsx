@@ -3,14 +3,14 @@
 import { useState } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import Map from "@/components/Map";
+import Map, { DEFAULT_VISIBILITY, type CategoryVisibility } from "@/components/Map";
 import DetailSidebar from "@/components/DetailSidebar";
-import type { HazardEvent, MapFilter } from "@/data/hazards";
+import type { HazardEvent } from "@/data/hazards";
 import type { SelectedItem } from "@/types/selection";
 
 export default function Home() {
   const [flyToTarget, setFlyToTarget] = useState<HazardEvent | null>(null);
-  const [activeFilter, setActiveFilter] = useState<MapFilter>("all");
+  const [visibility, setVisibility] = useState<CategoryVisibility>(DEFAULT_VISIBILITY);
   const [selected, setSelected] = useState<SelectedItem | null>(null);
 
   function handleSelectFromSearch(event: HazardEvent) {
@@ -26,8 +26,8 @@ export default function Home() {
         <div className="relative flex-1">
           <Map
             flyToTarget={flyToTarget}
-            activeFilter={activeFilter}
-            onFilterChange={setActiveFilter}
+            visibility={visibility}
+            onVisibilityChange={setVisibility}
             onSelectItem={setSelected}
             onClearSelection={() => setSelected(null)}
           />
