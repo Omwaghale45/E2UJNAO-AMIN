@@ -14,6 +14,8 @@ import TrendChart from "@/components/TrendChart";
 import FlashFloodPanel from "@/components/FlashFloodPanel";
 import LandslidePanel from "@/components/LandslidePanel";
 import AlertButton from "@/components/AlertButton";
+import LiveTelemetryPanel from "@/components/LiveTelemetryPanel";
+import { LIVE_SENSOR_STATION_ID } from "@/lib/mqtt-config";
 
 interface DetailSidebarProps {
   selected: SelectedItem | null;
@@ -203,6 +205,8 @@ function StationDetail({
   station: MonitoringStation;
   onClose: () => void;
 }) {
+  const isLiveSensor = station.id === LIVE_SENSOR_STATION_ID;
+
   return (
     <SidebarShell
       icon="station"
@@ -211,11 +215,22 @@ function StationDetail({
       district={station.district}
       state={station.state}
       badge={
-        <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-          Monitoring Station
-        </span>
+        isLiveSensor ? (
+          <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+            Live IoT Station
+          </span>
+        ) : (
+          <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+            Monitoring Station
+          </span>
+        )
       }
-      chart={<TrendChart seed={station.id} baseline={45} />}
+      chart={
+        <>
+          {isLiveSensor && <LiveTelemetryPanel />}
+          <TrendChart seed={station.id} baseline={45} />
+        </>
+      }
       hazardLabel="Monitored hazards"
       hazards={station.hazard}
       onClose={onClose}
