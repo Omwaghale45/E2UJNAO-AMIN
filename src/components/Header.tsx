@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CircleHelp, Languages, Search } from "lucide-react";
+import { CircleHelp, Languages, Search, Grid3x3 } from "lucide-react";
 import { getHazardEvents, type HazardEvent } from "@/data/hazards";
 
 const LOGO_LETTERS: { char: string; color: string }[] = [
@@ -11,13 +11,24 @@ const LOGO_LETTERS: { char: string; color: string }[] = [
   { char: "F", color: "#34A853" },
 ];
 
+// District-level risk-grid heat maps available via search (Rudraprayag
+// only for now — see src/lib/heatmap-grid.ts).
+const DISTRICT_HEATMAPS = [{ id: "rudraprayag", name: "Rudraprayag" }];
+
 interface HeaderProps {
   onSelectArea: (event: HazardEvent) => void;
+  onSelectDistrictHeatmap?: (districtId: string) => void;
 }
 
-export default function Header({ onSelectArea }: HeaderProps) {
+export default function Header({ onSelectArea, onSelectDistrictHeatmap }: HeaderProps) {
   const [query, setQuery] = useState("");
   const [isFocused, setIsFocused] = useState(false);
+
+  const districtMatch = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (q.length < 3) return null;
+    return DISTRICT_HEATMAPS.find((d) => d.name.toLowerCase().includes(q)) ?? null;
+  }, [query]);
 
   const suggestions = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -35,6 +46,12 @@ export default function Header({ onSelectArea }: HeaderProps) {
   function handleSelect(event: HazardEvent) {
     onSelectArea(event);
     setQuery(event.eventName);
+    setIsFocused(false);
+  }
+
+  function handleSelectDistrict(districtId: string, name: string) {
+    onSelectDistrictHeatmap?.(districtId);
+    setQuery(name);
     setIsFocused(false);
   }
 
@@ -66,8 +83,28 @@ export default function Header({ onSelectArea }: HeaderProps) {
             className="h-9 w-full rounded-full border border-zinc-200 bg-white pl-9 pr-4 text-sm text-zinc-800 shadow-sm outline-none focus:border-blue-400"
           />
 
-          {isFocused && suggestions.length > 0 && (
+          {isFocused && (districtMatch || suggestions.length > 0) && (
             <ul className="absolute left-0 right-0 top-[42px] z-20 max-h-80 overflow-auto rounded-2xl border border-zinc-200 bg-white py-2 shadow-lg">
+              {districtMatch && (
+                <li>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => handleSelectDistrict(districtMatch.id, districtMatch.name)}
+                    className="flex w-full items-center gap-2 border-b border-zinc-100 px-4 py-2 text-left hover:bg-zinc-50"
+                  >
+                    <Grid3x3 size={15} className="shrink-0 text-orange-500" />
+                    <span className="flex flex-col">
+                      <span className="text-sm font-medium text-zinc-800">
+                        {districtMatch.name} — Risk Grid
+                      </span>
+                      <span className="text-xs text-zinc-500">
+                        District-wide flash flood & landslide heat map
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              )}
               {suggestions.map((event) => (
                 <li key={event.id}>
                   <button

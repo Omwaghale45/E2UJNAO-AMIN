@@ -20,6 +20,8 @@ import {
   DEVICE_COLOR,
   SEVERITY_COLOR,
 } from "@/lib/hazard-display";
+import { getRudraprayagRiskGrid } from "@/lib/heatmap-grid";
+import { rudraprayagCenter } from "@/data/boundaries/rudraprayag";
 
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
 
@@ -33,6 +35,11 @@ const HEX_TO_POINT_ZOOM = 6;
 // Zoom to fly to when a search result is selected, so the destination
 // area renders as an individual point rather than a hexbin.
 const SEARCH_RESULT_ZOOM = 10;
+
+// District risk-grid heat map (currently supports Rudraprayag only).
+const RISK_GRID_SOURCE = "district-risk-grid";
+const RISK_GRID_LAYER = "district-risk-grid-fill";
+const RUDRAPRAYAG_ZOOM = 11;
 
 type MapStyleId = "standard" | "satellite";
 
@@ -377,12 +384,92 @@ function applyVisibility(map: mapboxgl.Map, visibility: CategoryVisibility) {
   );
 }
 
+// District risk-grid heat map: only rendered while a matching district
+// search is active (no zoom-based trigger, no click behavior).
+function addOrUpdateRiskGrid(map: mapboxgl.Map) {
+  const data = getRudraprayagRiskGrid();
+  const existingSource = map.getSource(RISK_GRID_SOURCE) as
+    | mapboxgl.GeoJSONSource
+    | undefined;
+
+  if (existingSource) {
+    existingSource.setData(data);
+    return;
+  }
+
+  map.addSource(RISK_GRID_SOURCE, { type: "geojson", data });
+
+  // Inserted before the hexbin layer so hazard hexbins/points/device
+  // squares always render above the grid, not under it.
+  const beforeId = map.getLayer("risk-hexbin-fill") ? "risk-hexbin-fill" : undefined;
+
+  map.addLayer(
+    {
+      id: RISK_GRID_LAYER,
+      type: "fill",
+      source: RISK_GRID_SOURCE,
+      paint: {
+        "fill-color": [
+          "match",
+          ["get", "riskLevel"],
+          "red",
+          "#ef4444",
+          "orange",
+          "#f97316",
+          "green",
+          "#22c55e",
+          "#22c55e",
+        ],
+        "fill-opacity": 0.55,
+        "fill-outline-color": "rgba(0,0,0,0.25)",
+      },
+    },
+    beforeId
+  );
+}
+
+function removeRiskGrid(map: mapboxgl.Map) {
+  if (map.getLayer(RISK_GRID_LAYER)) map.removeLayer(RISK_GRID_LAYER);
+  if (map.getSource(RISK_GRID_SOURCE)) map.removeSource(RISK_GRID_SOURCE);
+}
+
+// 3D terrain: real elevation data (Mapbox's public terrain-RGB tiles)
+// draped under every layer — re-run on every style.load since setStyle
+// wipes sources/terrain along with everything else.
+const TERRAIN_SOURCE = "mapbox-dem";
+const TERRAIN_EXAGGERATION = 1.4;
+
+function addTerrain(map: mapboxgl.Map) {
+  if (!map.getSource(TERRAIN_SOURCE)) {
+    map.addSource(TERRAIN_SOURCE, {
+      type: "raster-dem",
+      url: "mapbox://mapbox.terrain-rgb",
+      tileSize: 512,
+      maxzoom: 14,
+    });
+  }
+  map.setTerrain({ source: TERRAIN_SOURCE, exaggeration: TERRAIN_EXAGGERATION });
+
+  if (!map.getLayer("sky")) {
+    map.addLayer({
+      id: "sky",
+      type: "sky",
+      paint: {
+        "sky-type": "atmosphere",
+        "sky-atmosphere-sun-intensity": 15,
+      },
+    });
+  }
+}
+
 interface MapProps {
   flyToTarget?: HazardEvent | null;
   visibility: CategoryVisibility;
   onVisibilityChange?: (next: CategoryVisibility) => void;
   onSelectItem?: (item: SelectedItem) => void;
   onClearSelection?: () => void;
+  // Only "rudraprayag" is supported for now; null/undefined hides the grid.
+  heatmapDistrict?: string | null;
 }
 
 export default function Map({
@@ -391,6 +478,7 @@ export default function Map({
   onVisibilityChange,
   onSelectItem,
   onClearSelection,
+  heatmapDistrict,
 }: MapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -403,6 +491,9 @@ export default function Map({
   // instead of closing over the visibility prop, so a style change
   // mid-toggle still rebuilds with the current visibility.
   const visibilityRef = useRef<CategoryVisibility>(visibility);
+  // Read inside style.load so the grid survives a basemap style switch
+  // (setStyle wipes all sources/layers, including this one).
+  const heatmapDistrictRef = useRef<string | null | undefined>(heatmapDistrict);
   // Click handlers are registered once on mount; read the latest
   // onSelectItem/onClearSelection through refs instead of closing over
   // stale props.
@@ -441,7 +532,11 @@ export default function Map({
       // Render disputed borders (Jammu & Kashmir, Ladakh, Aksai Chin)
       // per India's worldview so they show as part of India.
       map.setConfigProperty("basemap", "worldview", INDIA_ISO_CODE);
+      addTerrain(map);
       addRiskLayers(map, visibilityRef.current);
+      if (heatmapDistrictRef.current === "rudraprayag") {
+        addOrUpdateRiskGrid(map);
+      }
     });
 
     // Only updates state when crossing the hex/point threshold (not on
@@ -535,6 +630,24 @@ export default function Map({
       zoom: SEARCH_RESULT_ZOOM,
     });
   }, [flyToTarget]);
+
+  // District risk-grid heat map: shown only while a matching district
+  // search is active — no zoom threshold, no click interaction.
+  useEffect(() => {
+    heatmapDistrictRef.current = heatmapDistrict;
+
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (heatmapDistrict === "rudraprayag") {
+      map.flyTo({ center: rudraprayagCenter, zoom: RUDRAPRAYAG_ZOOM });
+      if (map.isStyleLoaded()) {
+        addOrUpdateRiskGrid(map);
+      }
+    } else if (map.isStyleLoaded()) {
+      removeRiskGrid(map);
+    }
+  }, [heatmapDistrict]);
 
   function handleStyleChange(id: MapStyleId) {
     setActiveStyle(id);

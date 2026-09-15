@@ -12,15 +12,25 @@ export default function Home() {
   const [flyToTarget, setFlyToTarget] = useState<HazardEvent | null>(null);
   const [visibility, setVisibility] = useState<CategoryVisibility>(DEFAULT_VISIBILITY);
   const [selected, setSelected] = useState<SelectedItem | null>(null);
+  const [heatmapDistrict, setHeatmapDistrict] = useState<string | null>(null);
 
   function handleSelectFromSearch(event: HazardEvent) {
     setFlyToTarget(event);
     setSelected({ kind: "hazard", data: event });
+    setHeatmapDistrict(null);
+  }
+
+  function handleSelectDistrictHeatmap(districtId: string) {
+    setHeatmapDistrict(districtId);
+    setSelected(null);
   }
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden">
-      <Header onSelectArea={handleSelectFromSearch} />
+      <Header
+        onSelectArea={handleSelectFromSearch}
+        onSelectDistrictHeatmap={handleSelectDistrictHeatmap}
+      />
       <div className="flex flex-1 overflow-hidden">
         <DetailSidebar selected={selected} onClose={() => setSelected(null)} />
         <div className="relative flex-1">
@@ -30,6 +40,7 @@ export default function Home() {
             onVisibilityChange={setVisibility}
             onSelectItem={setSelected}
             onClearSelection={() => setSelected(null)}
+            heatmapDistrict={heatmapDistrict}
           />
         </div>
       </div>
