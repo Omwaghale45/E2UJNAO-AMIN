@@ -47,10 +47,13 @@ export function ensureWeatherMqttSubscription(): TelemetryCache {
   const cache = getCache();
 
   if (!global.__weatherMqttClient) {
-    const client = mqtt.connect(MQTT_BROKER_URL, {
-      reconnectPeriod: 3000,
-      connectTimeout: 8000,
-    });
+    const options: mqtt.IClientOptions = {
+      host: MQTT_BROKER_URL,
+      port: 1883,
+      protocol: "mqtt",
+    };
+
+    const client = mqtt.connect(options);
 
     client.on("connect", () => {
       cache.connected = true;

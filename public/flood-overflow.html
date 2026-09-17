@@ -1,0 +1,5260 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>Flood overflow</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.30.0/mapbox-gl.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Barlow:wght@500;600;700&family=Barlow+Semi+Condensed:wght@600;700&display=swap"
+        rel="stylesheet">
+    <style>
+/* Flood overflow - minimal shell. Palette matches flood-sim/css/flood-sim.css. */
+
+:root {
+  --paper-glass: rgba(244, 247, 248, 0.97);
+  --ink: #0f2533;
+  --ink-2: #475a66;
+  --ink-3: #6f7f88;
+  --rule: #d3dde2;
+  --accent: #1c5cab;
+  --accent-hover: #184f95;
+  --danger-ink: #a32525;
+  --shadow: 0 1px 2px rgba(15, 37, 51, 0.14), 0 10px 28px rgba(15, 37, 51, 0.24);
+  --font: "Barlow", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-tight: "Barlow Semi Condensed", "Barlow", system-ui, sans-serif;
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #0c1a22;
+  color: var(--ink);
+  font: 400 13px/1.45 var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+#map {
+  position: fixed;
+  inset: 0;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* ------------------------------------------------------------- info card */
+
+.info-card {
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  width: 300px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: var(--paper-glass);
+  box-shadow: var(--shadow);
+  z-index: 5;
+
+}
+
+.info-card h1 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.info-card p {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--ink-2);
+  line-height: 1.45;
+}
+
+.clock-row {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin-top: 14px;
+}
+
+.clock-row strong {
+  font: 700 30px/1 var(--font-tight);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.clock-row span {
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.stat-row {
+  display: flex;
+  gap: 18px;
+  margin-top: 12px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat span {
+  font-size: 11px;
+  color: var(--ink-2);
+}
+
+.stat strong {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.status {
+  margin-top: 12px !important;
+  padding-top: 10px;
+  border-top: 1px solid var(--rule);
+  font-size: 12px !important;
+  color: var(--ink-2) !important;
+}
+
+.status[data-kind="error"] {
+  color: var(--danger-ink) !important;
+}
+
+/* ----------------------------------------------------------------- legend */
+
+.legend-card {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  width: 220px;
+  padding: 12px 14px 14px;
+  border-radius: 12px;
+  background: var(--paper-glass);
+  box-shadow: var(--shadow);
+  z-index: 5;
+}
+
+.legend-title {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.legend-bar {
+  height: 10px;
+  margin-top: 6px;
+  border-radius: 3px;
+}
+
+.legend-ticks {
+  position: relative;
+  height: 16px;
+  margin-top: 3px;
+  font: 500 11px var(--font-tight);
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.legend-ticks span {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.legend-ticks span:first-child {
+  transform: none;
+}
+
+.legend-ticks span:last-child {
+  transform: translateX(-100%);
+}
+
+/* -------------------------------------------------------------- play button */
+
+.play-btn {
+  position: fixed;
+  left: 50%;
+  bottom: 34px;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ink);
+  color: #fff;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: background-color 0.12s, transform 0.08s;
+}
+
+.play-btn:hover:not(:disabled) {
+  background: #22414f;
+}
+
+.play-btn:active:not(:disabled) {
+  transform: translateX(-50%) scale(0.96);
+}
+
+.play-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.play-btn svg {
+  width: 32px;
+  height: 32px;
+}
+
+.play-btn .i-pause {
+  display: none;
+}
+
+.play-btn.playing .i-play {
+  display: none;
+}
+
+.play-btn.playing .i-pause {
+  display: block;
+}
+
+.play-hint {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 5;
+  margin: 0;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(15, 37, 51, 0.55);
+  color: #fff;
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.play-hint kbd {
+  font: inherit;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+/* ------------------------------------------------------------------ toast */
+
+.toast {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 7;
+  max-width: min(520px, calc(100vw - 32px));
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #fff;
+  font-weight: 500;
+  box-shadow: var(--shadow);
+}
+
+.toast[data-kind="error"] {
+  background: var(--danger-ink);
+  border-radius: 10px;
+}
+
+/* ------------------------------------------------------------- edit panel */
+
+.edit-panel {
+  position: fixed;
+  left: 14px;
+  bottom: 14px;
+  z-index: 6;
+  width: 280px;
+  padding: 12px 14px 14px;
+  border-radius: 12px;
+  background: var(--paper-glass);
+  box-shadow: var(--shadow);
+}
+
+.edit-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.edit-panel-title kbd {
+  font: 700 10px var(--font-tight);
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--ink);
+  color: #fff;
+}
+
+.edit-panel-tabs {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.edit-tab {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.edit-tab.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.edit-panel-check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.edit-panel-check input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.edit-panel-hint {
+  margin: 10px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.edit-detect-btn,
+.edit-copy-btn {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.edit-detect-btn {
+  background: var(--accent);
+}
+
+.edit-detect-btn:hover {
+  background: var(--accent-hover);
+}
+
+.edit-detect-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.edit-copy-btn {
+  background: var(--ink);
+}
+
+.edit-copy-btn:hover {
+  background: #22414f;
+}
+
+/* -------------------------------------------------------------- responsive */
+
+@media (max-width: 640px) {
+  .info-card {
+    width: min(300px, calc(100vw - 28px));
+  }
+
+  .legend-card {
+    display: none;
+  }
+
+  .play-btn {
+    width: 66px;
+    height: 66px;
+    bottom: 26px;
+  }
+
+  .play-btn svg {
+    width: 26px;
+    height: 26px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}
+</style>
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.30.0/mapbox-gl.js"></script>
+</head>
+
+<body>
+    <div id="map" aria-label="Map"></div>
+
+    <div class="info-card" id="info-card" style="display: none;">
+        <h1>Flood overflow</h1>
+        <p id="info-line">Setting up automatically&hellip;</p>
+        <div class="clock-row">
+            <strong id="clock-now">0:00</strong>
+            <span id="clock-total">of 0:00 h</span>
+        </div>
+        <div class="stat-row">
+            <div class="stat"><span>Flooded land</span><strong id="stat-area">0 ha</strong></div>
+            <div class="stat"><span>Peak vs. bankfull</span><strong id="stat-ratio">&ndash;</strong></div>
+        </div>
+        <p class="status" id="status-line">Loading terrain&hellip;</p>
+    </div>
+
+    <div class="legend-card" id="legend-card" hidden>
+        <div class="legend-title">Water depth <span>m</span></div>
+        <div class="legend-bar" id="legend-bar"></div>
+        <div class="legend-ticks" id="legend-ticks"></div>
+    </div>
+
+    <button type="button" class="play-btn" id="btn-play" aria-label="Play" disabled style="display: none;">
+        <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M7.5 5.2v13.6a.8.8 0 0 0 1.2.7l11-6.8a.8.8 0 0 0 0-1.4l-11-6.8a.8.8 0 0 0-1.2.7z"
+                fill="currentColor" />
+        </svg>
+        <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="6" y="5" width="4.2" height="14" rx="1" fill="currentColor" />
+            <rect x="13.8" y="5" width="4.2" height="14" rx="1" fill="currentColor" />
+        </svg>
+    </button>
+    <p class="play-hint" id="play-hint" style="display: none;">Press <kbd>Space</kbd> or click to play</p>
+
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+    <div class="edit-panel" id="edit-panel" hidden>
+        <div class="edit-panel-title">Edit river path <kbd>E</kbd></div>
+        <div class="edit-panel-tabs">
+            <button type="button" class="edit-tab" id="edit-tab-0" data-reach="0">Main river</button>
+            <button type="button" class="edit-tab" id="edit-tab-1" data-reach="1">Tributary</button>
+        </div>
+        <label class="edit-panel-check">
+            <input type="checkbox" id="edit-hide-water">
+            Hide river water
+        </label>
+        <p class="edit-panel-hint">Drag a point to move it. Click a small dot on the line to add a point.
+            Right-click a point to delete it.</p>
+        <button type="button" class="edit-detect-btn" id="edit-detect-btn">Auto-detect from map (OSM waterway data)</button>
+        <button type="button" class="edit-copy-btn" id="edit-copy-btn">Copy coordinates JSON</button>
+    </div>
+
+    <script>
+
+/* ---- flood-sim/js/config.js ---- */
+/*
+ * config.js - defaults for the flood simulator.
+ */
+(function (FS) {
+  'use strict';
+
+  FS.config = {
+    MAPBOX_TOKEN: 'pk.eyJ1Ijoic2Fta2FwYyIsImEiOiJjbXR3amtqZjcxMnZmMnlzNXpsN2o5eTR6In0._vA-jMQv94EJoY7-fnIMrQ',
+
+    map: {
+      style: 'mapbox://styles/mapbox/standard-satellite',
+      projection: 'globe',
+      center: [78.9818, 30.2885],
+      zoom: 13.7,
+      pitch: 52,
+      bearing: -24,
+      terrainExaggeration: 1.5
+    },
+
+    // Alaknanda River through Rudraprayag and the Mandakini joining it at the confluence,
+    // each listed upstream -> downstream. Traced from Mapbox Streets v8 waterways
+    // (© Mapbox © OpenStreetMap). The first river is the main river; the others are tributaries.
+
+    "defaultRiver": {
+      "name": "Alaknanda River",
+      "coordinates": [
+        [
+          78.99864,
+          30.30333
+        ],
+        [
+          78.99559,
+          30.30316
+        ],
+        [
+          78.9938,
+          30.30242
+        ],
+        [
+          78.99356,
+          30.30209
+        ],
+        [
+          78.99331,
+          30.30131
+        ],
+        [
+          78.9932,
+          30.30043
+        ],
+        [
+          78.99249,
+          30.29953
+        ],
+        [
+          78.98924,
+          30.29573
+        ],
+        [
+          78.98852,
+          30.29483
+        ],
+        [
+          78.98805,
+          30.29383
+        ],
+        [
+          78.9878,
+          30.29205
+        ],
+        [
+          78.98764,
+          30.29118
+        ],
+        [
+          78.98715,
+          30.29059
+        ],
+        [
+          78.98705,
+          30.29003
+        ],
+        [
+          78.98676,
+          30.28957
+        ],
+        [
+          78.98581,
+          30.28861
+        ],
+        [
+          78.98553,
+          30.28818
+        ],
+        [
+          78.98504,
+          30.28787
+        ],
+        [
+          78.98439,
+          30.28768
+        ],
+        [
+          78.98351,
+          30.28761
+        ],
+        [
+          78.98319,
+          30.28762
+        ],
+        [
+          78.98258,
+          30.28773
+        ],
+        [
+          78.98204,
+          30.28786
+        ],
+        [
+          78.98149,
+          30.28793
+        ],
+        [
+          78.98023,
+          30.28769
+        ],
+        [
+          78.97944,
+          30.28779
+        ],
+        [
+          78.9789,
+          30.28783
+        ],
+        [
+          78.97832,
+          30.28755
+        ],
+        [
+          78.97791,
+          30.28713
+        ],
+        [
+          78.97764,
+          30.28665
+        ],
+        [
+          78.97706,
+          30.28627
+        ],
+        [
+          78.97635,
+          30.28609
+        ],
+        [
+          78.97507,
+          30.28561
+        ],
+        [
+          78.97447,
+          30.28503
+        ],
+        [
+          78.97386,
+          30.28447
+        ],
+        [
+          78.97318,
+          30.28401
+        ],
+        [
+          78.97294,
+          30.28363
+        ],
+        [
+          78.9726,
+          30.28329
+        ],
+        [
+          78.97194,
+          30.28281
+        ],
+        [
+          78.97107,
+          30.28239
+        ],
+        [
+          78.96974,
+          30.28129
+        ],
+        [
+          78.96874,
+          30.27999
+        ],
+        [
+          78.96843,
+          30.27922
+        ],
+        [
+          78.96828,
+          30.27851
+        ],
+        [
+          78.96807,
+          30.27804
+        ],
+        [
+          78.96772,
+          30.2775
+        ],
+        [
+          78.96714,
+          30.27692
+        ],
+        [
+          78.96511,
+          30.276
+        ],
+        [
+          78.96438,
+          30.27533
+        ]
+      ]
+    },
+    "defaultNetwork": [
+      {
+        "name": "Mandakini",
+        "coordinates": [
+          [
+            78.97974,
+            30.30833
+          ],
+          [
+            78.97974,
+            30.30535
+          ],
+          [
+            78.98035,
+            30.30461
+          ],
+          [
+            78.98076,
+            30.30445
+          ],
+          [
+            78.98131,
+            30.3044
+          ],
+          [
+            78.98168,
+            30.3042
+          ],
+          [
+            78.98186,
+            30.30391
+          ],
+          [
+            78.98181,
+            30.30353
+          ],
+          [
+            78.98137,
+            30.30329
+          ],
+          [
+            78.97962,
+            30.30295
+          ],
+          [
+            78.9776,
+            30.30192
+          ],
+          [
+            78.97739,
+            30.30167
+          ],
+          [
+            78.97754,
+            30.3012
+          ],
+          [
+            78.97831,
+            30.30059
+          ],
+          [
+            78.97871,
+            30.3001
+          ],
+          [
+            78.9788,
+            30.29979
+          ],
+          [
+            78.97865,
+            30.29932
+          ],
+          [
+            78.97806,
+            30.29886
+          ],
+          [
+            78.97745,
+            30.29867
+          ],
+          [
+            78.97696,
+            30.29826
+          ],
+          [
+            78.97671,
+            30.29784
+          ],
+          [
+            78.97681,
+            30.29708
+          ],
+          [
+            78.97702,
+            30.29672
+          ],
+          [
+            78.97802,
+            30.29588
+          ],
+          [
+            78.97887,
+            30.29535
+          ],
+          [
+            78.97905,
+            30.29514
+          ],
+          [
+            78.97949,
+            30.29416
+          ],
+          [
+            78.97965,
+            30.29289
+          ],
+          [
+            78.97922,
+            30.29198
+          ],
+          [
+            78.97926,
+            30.29174
+          ],
+          [
+            78.97991,
+            30.29095
+          ],
+          [
+            78.98025,
+            30.29062
+          ],
+          [
+            78.98051,
+            30.29026
+          ],
+          [
+            78.98054,
+            30.28973
+          ],
+          [
+            78.98055,
+            30.2895
+          ],
+          [
+            78.9805,
+            30.28927
+          ],
+          [
+            78.98011,
+            30.28895
+          ],
+          [
+            78.97965,
+            30.28866
+          ],
+          [
+            78.97894,
+            30.28799
+          ],
+          [
+            78.9789,
+            30.28783
+          ]
+        ]
+      }
+    ],
+
+    channel: {
+      width: 80,          // m
+      depth: 5,           // m, bankfull depth carved below the valley floor
+      nChannel: 0.045,    // Manning n: boulder-bed mountain river
+      nFloodplain: 0.07,  // Manning n: fields, scrub and buildings
+      padding: 600,       // m of land modelled on each side of the river
+      cellSize: 0,        // 0 = automatic
+      snap: true
+    },
+
+    model: {
+      floodDepth: 0.1,     // m, depth counted as flooded
+      spinupMinutes: 45,
+      alpha: 0.7,
+      froudeMax: 1,
+      theta: 0.8,          // flux smoothing (1 = none)
+      maxCells: 300000,
+      maxFrames: 360,
+      frameMemoryMB: 240
+    },
+
+    hydrograph: {
+      preset: 'severe'
+    },
+
+    impacts: {
+      buildingDepth: 0.1,  // m at the building
+      roadFlooded: 0.1,    // m on the road
+      roadClosed: 0.3      // m, too deep for most vehicles
+    },
+
+    playbackSpeed: 600     // simulated seconds per real second
+  };
+})(self.FloodSim = self.FloodSim || {});
+
+
+/* ---- flood-sim/js/geo.js ---- */
+/*
+ * geo.js - Web Mercator conversions and planar geometry helpers.
+ *
+ * The simulation grid is aligned with Web Mercator so that the flood raster
+ * drapes exactly onto the map. Over a few kilometres the Mercator scale is
+ * effectively constant, so one metres-per-unit factor (at the grid's centre
+ * latitude) converts grid distances to ground distances.
+ */
+(function (FS) {
+  'use strict';
+
+  const EARTH_CIRCUMFERENCE = 40075016.68557849; // metres (WGS84 equator)
+  const DEG = Math.PI / 180;
+  const MAX_LAT = 85.051129;
+
+  const mercX = (lng) => (lng + 180) / 360;
+  const lngOf = (x) => x * 360 - 180;
+  const latOf = (y) => Math.atan(Math.sinh(Math.PI * (1 - 2 * y))) / DEG;
+
+  function mercY(lat) {
+    const s = Math.sin(Math.max(-MAX_LAT, Math.min(MAX_LAT, lat)) * DEG);
+    return 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI);
+  }
+
+  const toMerc = (p) => [mercX(p[0]), mercY(p[1])];
+  const toLngLat = (m) => [lngOf(m[0]), latOf(m[1])];
+
+  /** Ground metres per Mercator unit at a latitude. */
+  const metersPerUnit = (lat) => EARTH_CIRCUMFERENCE * Math.cos(lat * DEG);
+
+  function haversine(a, b) {
+    const R = 6371008.8;
+    const dLat = (b[1] - a[1]) * DEG;
+    const dLng = (b[0] - a[0]) * DEG;
+    const s = Math.sin(dLat / 2) ** 2 +
+      Math.cos(a[1] * DEG) * Math.cos(b[1] * DEG) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
+  }
+
+  function lineLength(coords) {
+    let total = 0;
+    for (let i = 1; i < coords.length; i++) total += haversine(coords[i - 1], coords[i]);
+    return total;
+  }
+
+  /** Squared distance from point p to segment ab, plus the projection parameter. */
+  function segmentDistance2(px, py, ax, ay, bx, by, out) {
+    const dx = bx - ax, dy = by - ay;
+    const len2 = dx * dx + dy * dy;
+    let t = len2 > 0 ? ((px - ax) * dx + (py - ay) * dy) / len2 : 0;
+    const tc = t < 0 ? 0 : t > 1 ? 1 : t;
+    const ex = ax + tc * dx - px, ey = ay + tc * dy - py;
+    if (out) out.t = t;
+    return ex * ex + ey * ey;
+  }
+
+  /** Resample a planar polyline every `spacing` units. Returns { pts, s, length }. */
+  function resample(pts, spacing) {
+    const out = [[pts[0][0], pts[0][1]]];
+    const s = [0];
+    let dist = 0;
+    let next = spacing;
+    for (let i = 1; i < pts.length; i++) {
+      const ax = pts[i - 1][0], ay = pts[i - 1][1];
+      const bx = pts[i][0], by = pts[i][1];
+      const seg = Math.hypot(bx - ax, by - ay);
+      if (seg === 0) continue;
+      while (next <= dist + seg) {
+        const f = (next - dist) / seg;
+        out.push([ax + (bx - ax) * f, ay + (by - ay) * f]);
+        s.push(next);
+        next += spacing;
+      }
+      dist += seg;
+    }
+    const last = pts[pts.length - 1];
+    if (out.length === 1 || dist - s[s.length - 1] > spacing * 0.25) {
+      out.push([last[0], last[1]]);
+      s.push(dist);
+    } else {
+      out[out.length - 1] = [last[0], last[1]];
+      s[s.length - 1] = dist;
+    }
+    return { pts: out, s, length: dist };
+  }
+
+  /** Douglas-Peucker simplification of a planar polyline. */
+  function simplify(pts, tolerance) {
+    if (pts.length <= 2) return pts.map((p) => [p[0], p[1]]);
+    const keep = new Uint8Array(pts.length);
+    keep[0] = 1;
+    keep[pts.length - 1] = 1;
+    const tol2 = tolerance * tolerance;
+    const stack = [[0, pts.length - 1]];
+    while (stack.length) {
+      const [a, b] = stack.pop();
+      let maxD = -1, idx = -1;
+      for (let i = a + 1; i < b; i++) {
+        const d = segmentDistance2(pts[i][0], pts[i][1], pts[a][0], pts[a][1], pts[b][0], pts[b][1]);
+        if (d > maxD) { maxD = d; idx = i; }
+      }
+      if (idx > 0 && maxD > tol2) {
+        keep[idx] = 1;
+        stack.push([a, idx], [idx, b]);
+      }
+    }
+    const result = [];
+    for (let i = 0; i < pts.length; i++) if (keep[i]) result.push([pts[i][0], pts[i][1]]);
+    return result;
+  }
+
+  /** Moving-average smoothing that keeps both end points fixed. */
+  function smooth(pts, radius, iterations) {
+    let cur = pts.map((p) => [p[0], p[1]]);
+    const n = cur.length;
+    for (let it = 0; it < (iterations || 1); it++) {
+      const next = cur.map((p) => [p[0], p[1]]);
+      for (let i = 1; i < n - 1; i++) {
+        const r = Math.min(radius, i, n - 1 - i);
+        let sx = 0, sy = 0;
+        for (let k = -r; k <= r; k++) { sx += cur[i + k][0]; sy += cur[i + k][1]; }
+        next[i][0] = sx / (2 * r + 1);
+        next[i][1] = sy / (2 * r + 1);
+      }
+      cur = next;
+    }
+    return cur;
+  }
+
+  /**
+   * Marching squares on a cell-centred field. Cells outside the grid count as 0.
+   * Returns a flat array [x0, y0, x1, y1, ...] of segments in grid units
+   * (cell (i, j) has its centre at (i + 0.5, j + 0.5)).
+   * `box` limits the scan to cell indices {i0, i1, j0, j1}.
+   */
+  function contour(values, nx, ny, threshold, box) {
+    const out = [];
+    const i0 = Math.max(-1, (box ? box.i0 : 0) - 1), i1 = Math.min(nx - 1, box ? box.i1 : nx - 1);
+    const j0 = Math.max(-1, (box ? box.j0 : 0) - 1), j1 = Math.min(ny - 1, box ? box.j1 : ny - 1);
+    const get = (i, j) => (i < 0 || j < 0 || i >= nx || j >= ny) ? 0 : values[j * nx + i];
+    for (let j = j0; j <= j1; j++) {
+      for (let i = i0; i <= i1; i++) {
+        const tl = get(i, j), tr = get(i + 1, j), br = get(i + 1, j + 1), bl = get(i, j + 1);
+        const code = (tl >= threshold ? 8 : 0) | (tr >= threshold ? 4 : 0) |
+          (br >= threshold ? 2 : 0) | (bl >= threshold ? 1 : 0);
+        if (code === 0 || code === 15) continue;
+        const x = i + 0.5, y = j + 0.5;
+        const T = () => out.push(x + (threshold - tl) / (tr - tl), y);
+        const R = () => out.push(x + 1, y + (threshold - tr) / (br - tr));
+        const B = () => out.push(x + (threshold - bl) / (br - bl), y + 1);
+        const L = () => out.push(x, y + (threshold - tl) / (bl - tl));
+        switch (code) {
+          case 1: case 14: L(); B(); break;
+          case 2: case 13: B(); R(); break;
+          case 3: case 12: L(); R(); break;
+          case 4: case 11: T(); R(); break;
+          case 5: T(); R(); L(); B(); break;
+          case 6: case 9: T(); B(); break;
+          case 7: case 8: T(); L(); break;
+          case 10: T(); L(); B(); R(); break;
+        }
+      }
+    }
+    return out;
+  }
+
+  /** Slippy-map tiles covering Mercator bounds {x0, y0, x1, y1}. */
+  function tilesCovering(bounds, z) {
+    const n = 2 ** z;
+    const clampT = (v) => Math.max(0, Math.min(n - 1, v));
+    const tx0 = clampT(Math.floor(bounds.x0 * n)), tx1 = clampT(Math.floor(bounds.x1 * n));
+    const ty0 = clampT(Math.floor(bounds.y0 * n)), ty1 = clampT(Math.floor(bounds.y1 * n));
+    const tiles = [];
+    for (let y = ty0; y <= ty1; y++) for (let x = tx0; x <= tx1; x++) tiles.push({ z, x, y });
+    return tiles;
+  }
+
+  /** Compass bearing (degrees clockwise from north) of a vector with east/north components. */
+  function bearing(east, north) {
+    const deg = Math.atan2(east, north) / DEG;
+    return (deg + 360) % 360;
+  }
+
+  const COMPASS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+  const compass = (deg) => COMPASS[Math.round(deg / 22.5) % 16];
+
+  FS.geo = {
+    EARTH_CIRCUMFERENCE, mercX, mercY, lngOf, latOf, toMerc, toLngLat, metersPerUnit,
+    haversine, lineLength, segmentDistance2, resample, simplify, smooth, contour,
+    tilesCovering, bearing, compass
+  };
+})(self.FloodSim = self.FloodSim || {});
+
+
+/* ---- flood-sim/js/mvt.js ---- */
+/*
+ * mvt.js - minimal Mapbox Vector Tile (MVT 2.x) decoder.
+ *
+ * Decodes a protobuf-encoded vector tile into layers and features with
+ * properties and geometry in tile-local integer coordinates (0..extent).
+ * Used to read waterways, buildings, roads and POIs from Mapbox Streets v8.
+ */
+(function (FS) {
+  'use strict';
+
+  const textDecoder = new TextDecoder('utf-8');
+  const TWO_POW_63 = Math.pow(2, 63);
+  const TWO_POW_64 = Math.pow(2, 64);
+
+  function Pbf(bytes) {
+    this.buf = bytes;
+    this.pos = 0;
+    this.view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  }
+
+  Pbf.prototype.varint = function () {
+    const buf = this.buf;
+    let b = buf[this.pos++];
+    let val = b & 0x7f;
+    if (b < 0x80) return val;
+    b = buf[this.pos++]; val |= (b & 0x7f) << 7; if (b < 0x80) return val;
+    b = buf[this.pos++]; val |= (b & 0x7f) << 14; if (b < 0x80) return val;
+    b = buf[this.pos++]; val |= (b & 0x7f) << 21; if (b < 0x80) return val;
+    // Past 28 bits, continue in floating point (exact up to 2^53).
+    let mul = 268435456;
+    do {
+      b = buf[this.pos++];
+      val += (b & 0x7f) * mul;
+      mul *= 128;
+    } while (b >= 0x80);
+    return val;
+  };
+
+  Pbf.prototype.svarint = function () {
+    const n = this.varint();
+    return n % 2 === 1 ? (n + 1) / -2 : n / 2;
+  };
+
+  Pbf.prototype.string = function () {
+    const len = this.varint();
+    const s = textDecoder.decode(this.buf.subarray(this.pos, this.pos + len));
+    this.pos += len;
+    return s;
+  };
+
+  Pbf.prototype.skip = function (wire) {
+    if (wire === 0) {
+      while (this.buf[this.pos++] > 0x7f) { /* consume varint */ }
+    } else if (wire === 2) {
+      const len = this.varint();
+      this.pos += len;
+    } else if (wire === 5) {
+      this.pos += 4;
+    } else if (wire === 1) {
+      this.pos += 8;
+    } else {
+      throw new Error('Unsupported protobuf wire type ' + wire);
+    }
+  };
+
+  function readValue(pbf, end) {
+    let value = null;
+    while (pbf.pos < end) {
+      const tag = pbf.varint();
+      const field = tag >> 3;
+      const wire = tag & 7;
+      if (field === 1) value = pbf.string();
+      else if (field === 2) { value = pbf.view.getFloat32(pbf.pos, true); pbf.pos += 4; }
+      else if (field === 3) { value = pbf.view.getFloat64(pbf.pos, true); pbf.pos += 8; }
+      else if (field === 4) { value = pbf.varint(); if (value >= TWO_POW_63) value -= TWO_POW_64; }
+      else if (field === 5) value = pbf.varint();
+      else if (field === 6) value = pbf.svarint();
+      else if (field === 7) value = pbf.varint() !== 0;
+      else pbf.skip(wire);
+    }
+    pbf.pos = end;
+    return value;
+  }
+
+  function readLayer(pbf, end) {
+    const layer = { name: '', extent: 4096, version: 1, keys: [], values: [], offsets: [] };
+    while (pbf.pos < end) {
+      const tag = pbf.varint();
+      const field = tag >> 3;
+      const wire = tag & 7;
+      if (field === 1 && wire === 2) {
+        layer.name = pbf.string();
+      } else if (field === 2 && wire === 2) {
+        const len = pbf.varint();
+        layer.offsets.push(pbf.pos, pbf.pos + len);
+        pbf.pos += len;
+      } else if (field === 3 && wire === 2) {
+        layer.keys.push(pbf.string());
+      } else if (field === 4 && wire === 2) {
+        const len = pbf.varint();
+        layer.values.push(readValue(pbf, pbf.pos + len));
+      } else if (field === 5 && wire === 0) {
+        layer.extent = pbf.varint();
+      } else if (field === 15 && wire === 0) {
+        layer.version = pbf.varint();
+      } else {
+        pbf.skip(wire);
+      }
+    }
+    return layer;
+  }
+
+  // Geometry as an array of parts; each part is an array of [x, y] in tile units.
+  // Polygon rings are closed (first point repeated at the end).
+  function readGeometry(pbf, start, end) {
+    pbf.pos = start;
+    const parts = [];
+    let part = null;
+    let x = 0, y = 0, cmd = 1, count = 0;
+    while (pbf.pos < end) {
+      if (count <= 0) {
+        const c = pbf.varint();
+        cmd = c & 7;
+        count = c >> 3;
+        if (count === 0) continue;
+      }
+      count--;
+      if (cmd === 1 || cmd === 2) {
+        x += pbf.svarint();
+        y += pbf.svarint();
+        if (cmd === 1 || !part) {
+          part = [];
+          parts.push(part);
+        }
+        part.push([x, y]);
+      } else if (cmd === 7) {
+        if (part && part.length) part.push([part[0][0], part[0][1]]);
+      } else {
+        throw new Error('Unknown vector tile geometry command ' + cmd);
+      }
+    }
+    return parts;
+  }
+
+  function readFeature(bytes, layer, index) {
+    const start = layer.offsets[index * 2];
+    const end = layer.offsets[index * 2 + 1];
+    const pbf = new Pbf(bytes);
+    pbf.pos = start;
+    const feature = { id: undefined, type: 0, properties: {}, geometry: null };
+    let geomStart = -1, geomEnd = -1;
+    while (pbf.pos < end) {
+      const tag = pbf.varint();
+      const field = tag >> 3;
+      const wire = tag & 7;
+      if (field === 1 && wire === 0) {
+        feature.id = pbf.varint();
+      } else if (field === 2 && wire === 2) {
+        const tagsEnd = pbf.varint() + pbf.pos;
+        while (pbf.pos < tagsEnd) {
+          const key = layer.keys[pbf.varint()];
+          feature.properties[key] = layer.values[pbf.varint()];
+        }
+      } else if (field === 3 && wire === 0) {
+        feature.type = pbf.varint();
+      } else if (field === 4 && wire === 2) {
+        const len = pbf.varint();
+        geomStart = pbf.pos;
+        geomEnd = pbf.pos + len;
+        pbf.pos = geomEnd;
+      } else {
+        pbf.skip(wire);
+      }
+    }
+    if (geomStart >= 0) feature.geometry = readGeometry(pbf, geomStart, geomEnd);
+    return feature;
+  }
+
+  /** Decode a (decompressed) tile. Returns { layerName: { name, extent, length, feature(i) } }. */
+  function decodeTile(bytes) {
+    const pbf = new Pbf(bytes);
+    const layers = {};
+    while (pbf.pos < bytes.length) {
+      const tag = pbf.varint();
+      const field = tag >> 3;
+      const wire = tag & 7;
+      if (field === 3 && wire === 2) {
+        const len = pbf.varint();
+        const end = pbf.pos + len;
+        const layer = readLayer(pbf, end);
+        pbf.pos = end;
+        layers[layer.name] = {
+          name: layer.name,
+          extent: layer.extent,
+          length: layer.offsets.length / 2,
+          feature: (i) => readFeature(bytes, layer, i)
+        };
+      } else {
+        pbf.skip(wire);
+      }
+    }
+    return layers;
+  }
+
+  /** Surveyor's formula in tile coordinates; exterior rings are positive (MVT 2.x). */
+  function signedArea(ring) {
+    let sum = 0;
+    for (let i = 0, n = ring.length - 1; i < n; i++) {
+      sum += ring[i][0] * ring[i + 1][1] - ring[i + 1][0] * ring[i][1];
+    }
+    return sum / 2;
+  }
+
+  /** Group polygon rings into polygons: [[outer, hole, hole], [outer], ...]. */
+  function classifyRings(rings) {
+    const polygons = [];
+    let current = null;
+    for (const ring of rings) {
+      if (ring.length < 4) continue;
+      const area = signedArea(ring);
+      if (area === 0) continue;
+      if (area > 0) {
+        current = [ring];
+        polygons.push(current);
+      } else if (current) {
+        current.push(ring);
+      }
+    }
+    return polygons;
+  }
+
+  async function gunzip(bytes) {
+    if (typeof DecompressionStream === 'undefined') {
+      throw new Error('This browser cannot decompress gzip vector tiles (DecompressionStream missing).');
+    }
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+
+  /** Fetch and decode a vector tile. Resolves to null for empty tiles. */
+  async function fetchTile(url, signal) {
+    const res = await fetch(url, { signal });
+    if (res.status === 404 || res.status === 204) return null;
+    if (!res.ok) throw new Error('Vector tile request failed (HTTP ' + res.status + ')');
+    let bytes = new Uint8Array(await res.arrayBuffer());
+    if (bytes.length === 0) return null;
+    if (bytes[0] === 0x1f && bytes[1] === 0x8b) bytes = await gunzip(bytes);
+    return decodeTile(bytes);
+  }
+
+  FS.mvt = { decodeTile, fetchTile, gunzip, signedArea, classifyRings };
+})(self.FloodSim = self.FloodSim || {});
+
+
+/* ---- flood-sim/js/terrain.js ---- */
+/*
+ * terrain.js - elevation data for the model grid.
+ *
+ * Fetches Mapbox terrain tiles (the same Terrain-DEM v1 data the map drapes
+ * over the globe), decodes the RGB elevation encoding
+ *   height = -10000 + (R·256² + G·256 + B) · 0.1
+ * and samples it bilinearly at the grid cell centres.
+ * Falls back to Mapbox Terrain-RGB v1 if Terrain-DEM tiles cannot be read.
+ */
+(function (FS) {
+  'use strict';
+
+  const SOURCES = [
+    { id: 'mapbox.mapbox-terrain-dem-v1', label: 'Mapbox Terrain-DEM v1' },
+    { id: 'mapbox.terrain-rgb', label: 'Mapbox Terrain-RGB v1' }
+  ];
+
+  async function decodeInBrowser(buffer) {
+    const blob = new Blob([buffer], { type: 'image/png' });
+    const bitmap = await createImageBitmap(blob, { premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
+    const w = bitmap.width, h = bitmap.height;
+    let ctx;
+    if (typeof OffscreenCanvas !== 'undefined') {
+      ctx = new OffscreenCanvas(w, h).getContext('2d', { willReadFrequently: true });
+    } else {
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      ctx = canvas.getContext('2d', { willReadFrequently: true });
+    }
+    ctx.drawImage(bitmap, 0, 0);
+    if (bitmap.close) bitmap.close();
+    return { width: w, height: h, data: ctx.getImageData(0, 0, w, h).data };
+  }
+
+  function tileUrl(sourceId, t, retina, token) {
+    return 'https://api.mapbox.com/v4/' + sourceId + '/' + t.z + '/' + t.x + '/' + t.y +
+      (retina ? '@2x' : '') + '.pngraw?access_token=' + encodeURIComponent(token);
+  }
+
+  async function loadSource(source, tiles, opts, decode) {
+    const map = new Map();
+    let next = 0, done = 0, size = 0;
+    async function run() {
+      while (next < tiles.length) {
+        const t = tiles[next++];
+        const res = await fetch(tileUrl(source.id, t, opts.retina, opts.token), { signal: opts.signal });
+        if (!res.ok) throw new Error(source.label + ' tile request failed (HTTP ' + res.status + ')');
+        const img = await decode(await res.arrayBuffer());
+        if (img.width !== img.height) throw new Error('Unexpected elevation tile size ' + img.width + '×' + img.height);
+        size = img.width;
+        const px = img.width * img.height;
+        const elev = new Float32Array(px);
+        const d = img.data;
+        for (let i = 0, o = 0; i < px; i++, o += 4) {
+          elev[i] = -10000 + (d[o] * 65536 + d[o + 1] * 256 + d[o + 2]) * 0.1;
+        }
+        map.set(t.x + '/' + t.y, elev);
+        done++;
+        if (opts.onProgress) opts.onProgress(done, tiles.length);
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(6, tiles.length) }, run));
+    return makeSampler(tiles[0].z, size, map, source);
+  }
+
+  function makeSampler(z, size, tileMap, source) {
+    const scale = 2 ** z * size;
+    function pixel(gx, gy) {
+      const tx = Math.floor(gx / size), ty = Math.floor(gy / size);
+      const data = tileMap.get(tx + '/' + ty);
+      return data ? data[(gy - ty * size) * size + (gx - tx * size)] : NaN;
+    }
+    /** Bilinear elevation (m) at a Mercator coordinate. */
+    function sample(mx, my) {
+      const px = mx * scale - 0.5, py = my * scale - 0.5;
+      const x0 = Math.floor(px), y0 = Math.floor(py);
+      const fx = px - x0, fy = py - y0;
+      const a = pixel(x0, y0), b = pixel(x0 + 1, y0), c = pixel(x0, y0 + 1), d = pixel(x0 + 1, y0 + 1);
+      if (a === a && b === b && c === c && d === d) {
+        return (a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + d * fx) * fy;
+      }
+      let sum = 0, count = 0;
+      for (const v of [a, b, c, d]) if (v === v) { sum += v; count++; }
+      return count ? sum / count : NaN;
+    }
+    return { z, size, source: source.label, metersPerPixel: null, sample };
+  }
+
+  /**
+   * Load elevation for Mercator bounds.
+   * opts: { zoom, retina, token, signal, onProgress(done, total), decode? }
+   */
+  async function load(bounds, opts) {
+    const decode = opts.decode || decodeInBrowser;
+    const n = 2 ** opts.zoom;
+    const margin = 3 / (n * (opts.retina ? 512 : 256));
+    const tiles = FS.geo.tilesCovering({
+      x0: bounds.x0 - margin, y0: bounds.y0 - margin, x1: bounds.x1 + margin, y1: bounds.y1 + margin
+    }, opts.zoom);
+    let lastError = null;
+    for (const source of SOURCES) {
+      try {
+        return await loadSource(source, tiles, opts, decode);
+      } catch (err) {
+        if (opts.signal && opts.signal.aborted) throw err;
+        lastError = err;
+      }
+    }
+    throw lastError || new Error('Elevation tiles could not be loaded.');
+  }
+
+  /**
+   * Sample the DEM at every grid cell. When cells are larger than two DEM
+   * pixels, each cell averages a 2×2 set of sub-samples to avoid aliasing.
+   */
+  function sampleGrid(dem, grid) {
+    const { nx, ny, cellMerc, bounds } = grid;
+    const out = new Float32Array(nx * ny);
+    const pixelMerc = 1 / (2 ** dem.z * dem.size);
+    const sub = cellMerc > 2 * pixelMerc;
+    let min = Infinity, max = -Infinity, bad = 0;
+    for (let j = 0; j < ny; j++) {
+      for (let i = 0; i < nx; i++) {
+        const mx = bounds.x0 + (i + 0.5) * cellMerc;
+        const my = bounds.y0 + (j + 0.5) * cellMerc;
+        let v;
+        if (sub) {
+          const q = cellMerc * 0.25;
+          v = 0.25 * (dem.sample(mx - q, my - q) + dem.sample(mx + q, my - q) +
+            dem.sample(mx - q, my + q) + dem.sample(mx + q, my + q));
+        } else {
+          v = dem.sample(mx, my);
+        }
+        if (!(v === v)) { bad++; v = 0; }
+        out[j * nx + i] = v;
+        if (v < min) min = v;
+        if (v > max) max = v;
+      }
+    }
+    if (bad > 0.01 * nx * ny) throw new Error('Elevation data is missing for part of the model area.');
+    return { z: out, min, max };
+  }
+
+  FS.terrain = { SOURCES, load, sampleGrid, tileUrl };
+})(self.FloodSim = self.FloodSim || {});
+
+
+/* ---- flood-sim/js/mapdata.js ---- */
+/*
+ * mapdata.js - reads Mapbox Streets v8 vector tiles to
+ *   1. detect the river centreline near the map view (waterway lines), and
+ *   2. load buildings, roads and key facilities inside the model area.
+ */
+(function (FS) {
+  'use strict';
+
+  const G = FS.geo;
+
+  const ROAD_CLASSES = new Set([
+    'motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link',
+    'secondary', 'secondary_link', 'tertiary', 'tertiary_link', 'street', 'street_limited',
+    'service', 'track'
+  ]);
+
+  const FACILITY_KINDS = {
+    medical: 'Health care',
+    education: 'Education',
+    public_facilities: 'Public service',
+    religion: 'Place of worship',
+    lodging: 'Lodging'
+  };
+
+  function streetsUrl(t, token) {
+    return 'https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/' + t.z + '/' + t.x + '/' + t.y +
+      '.vector.pbf?access_token=' + encodeURIComponent(token);
+  }
+
+  async function fetchStreetsTiles(tiles, token, opts) {
+    const options = opts || {};
+    const out = new Array(tiles.length).fill(null);
+    let next = 0, done = 0, failures = 0, lastError = null;
+    async function run() {
+      while (next < tiles.length) {
+        const k = next++;
+        try {
+          out[k] = await FS.mvt.fetchTile(streetsUrl(tiles[k], token), options.signal);
+        } catch (err) {
+          if (options.signal && options.signal.aborted) throw err;
+          failures++;
+          lastError = err;
+        }
+        done++;
+        if (options.onProgress) options.onProgress(done, tiles.length);
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(6, tiles.length) }, run));
+    if (tiles.length && failures === tiles.length) throw lastError;
+    return { tiles: out, failures };
+  }
+
+  // Liang-Barsky clip of segment ab to the square [min, max]².
+  function clipSegment(a, b, min, max) {
+    let t0 = 0, t1 = 1;
+    const dx = b[0] - a[0], dy = b[1] - a[1];
+    const p = [-dx, dx, -dy, dy];
+    const q = [a[0] - min, max - a[0], a[1] - min, max - a[1]];
+    for (let k = 0; k < 4; k++) {
+      if (p[k] === 0) {
+        if (q[k] < 0) return null;
+      } else {
+        const r = q[k] / p[k];
+        if (p[k] < 0) {
+          if (r > t1) return null;
+          if (r > t0) t0 = r;
+        } else {
+          if (r < t0) return null;
+          if (r < t1) t1 = r;
+        }
+      }
+    }
+    return [[a[0] + t0 * dx, a[1] + t0 * dy], [a[0] + t1 * dx, a[1] + t1 * dy], t0 > 0, t1 < 1];
+  }
+
+  /** Clip a polyline to the tile square, dropping the buffer that overlaps neighbouring tiles. */
+  function clipLine(points, min, max) {
+    const parts = [];
+    let cur = null;
+    for (let i = 1; i < points.length; i++) {
+      const seg = clipSegment(points[i - 1], points[i], min, max);
+      if (!seg) {
+        if (cur) { parts.push(cur); cur = null; }
+        continue;
+      }
+      if (!cur || seg[2]) {
+        if (cur) parts.push(cur);
+        cur = [seg[0]];
+      }
+      cur.push(seg[1]);
+      if (seg[3]) { parts.push(cur); cur = null; }
+    }
+    if (cur) parts.push(cur);
+    return parts.filter((part) => part.length >= 2);
+  }
+
+  function polylineLength(pts) {
+    let len = 0;
+    for (let i = 1; i < pts.length; i++) len += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+    return len;
+  }
+
+  /** Join line pieces whose end points meet (within `tol` metres) into a graph. */
+  function buildGraph(lines, tol) {
+    const nodes = [];
+    const edges = [];
+    const buckets = new Map();
+    function nodeFor(pt) {
+      const gx = Math.floor(pt[0] / tol), gy = Math.floor(pt[1] / tol);
+      let best = -1, bestD = tol * tol;
+      for (let ox = -1; ox <= 1; ox++) {
+        for (let oy = -1; oy <= 1; oy++) {
+          const list = buckets.get((gx + ox) + ',' + (gy + oy));
+          if (!list) continue;
+          for (const id of list) {
+            const d = (nodes[id].x - pt[0]) ** 2 + (nodes[id].y - pt[1]) ** 2;
+            if (d <= bestD) { bestD = d; best = id; }
+          }
+        }
+      }
+      if (best >= 0) return best;
+      const id = nodes.length;
+      nodes.push({ x: pt[0], y: pt[1], edges: [] });
+      const key = gx + ',' + gy;
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push(id);
+      return id;
+    }
+    for (const pts of lines) {
+      const len = polylineLength(pts);
+      if (len < 0.5) continue;
+      const a = nodeFor(pts[0]);
+      const b = nodeFor(pts[pts.length - 1]);
+      if (a === b && len < tol * 4) continue;
+      const id = edges.length;
+      edges.push({ a, b, pts, len });
+      nodes[a].edges.push(id);
+      nodes[b].edges.push(id);
+    }
+    return { nodes, edges };
+  }
+
+  function components(graph) {
+    const seen = new Uint8Array(graph.nodes.length);
+    const comps = [];
+    for (let start = 0; start < graph.nodes.length; start++) {
+      if (seen[start] || graph.nodes[start].edges.length === 0) continue;
+      const nodes = [], edgeSet = new Set(), stack = [start];
+      seen[start] = 1;
+      while (stack.length) {
+        const u = stack.pop();
+        nodes.push(u);
+        for (const eid of graph.nodes[u].edges) {
+          edgeSet.add(eid);
+          const e = graph.edges[eid];
+          const v = e.a === u ? e.b : e.a;
+          if (!seen[v]) { seen[v] = 1; stack.push(v); }
+        }
+      }
+      comps.push({ nodes, edges: [...edgeSet] });
+    }
+    return comps;
+  }
+
+  function dijkstra(graph, start) {
+    const dist = new Map([[start, 0]]);
+    const via = new Map();
+    const queue = [[0, start]];
+    while (queue.length) {
+      let bi = 0;
+      for (let i = 1; i < queue.length; i++) if (queue[i][0] < queue[bi][0]) bi = i;
+      const [d, u] = queue[bi];
+      queue[bi] = queue[queue.length - 1];
+      queue.pop();
+      if (d > dist.get(u)) continue;
+      for (const eid of graph.nodes[u].edges) {
+        const e = graph.edges[eid];
+        const v = e.a === u ? e.b : e.a;
+        const nd = d + e.len;
+        if (!dist.has(v) || nd < dist.get(v)) {
+          dist.set(v, nd);
+          via.set(v, eid);
+          queue.push([nd, v]);
+        }
+      }
+    }
+    let far = start, farD = 0;
+    for (const [node, d] of dist) if (d > farD) { farD = d; far = node; }
+    return { far, via };
+  }
+
+  /** Longest path through a component, oriented to agree with the majority of source line directions. */
+  function longestPath(graph, comp) {
+    const first = dijkstra(graph, comp.nodes[0]).far;
+    const { far, via } = dijkstra(graph, first);
+    const edgeSeq = [];
+    for (let node = far; node !== first;) {
+      const eid = via.get(node);
+      const e = graph.edges[eid];
+      edgeSeq.push({ eid, from: e.a === node ? e.b : e.a, to: node });
+      node = e.a === node ? e.b : e.a;
+    }
+    edgeSeq.reverse();
+    const pts = [];
+    let forward = 0, backward = 0;
+    for (const step of edgeSeq) {
+      const e = graph.edges[step.eid];
+      const along = e.a === step.from;
+      const seq = along ? e.pts : e.pts.slice().reverse();
+      if (along) forward += e.len; else backward += e.len;
+      for (let i = pts.length ? 1 : 0; i < seq.length; i++) pts.push(seq[i]);
+    }
+    return { pts: backward > forward ? pts.reverse() : pts, edges: new Set(edgeSeq.map((s) => s.eid)) };
+  }
+
+  /**
+   * Rivers that join the main reach part-way along it (not at its ends).
+   * Returns up to three [{ pts (upstream -> confluence, metres), joinS }], longest first.
+   */
+  function findTributaries(graph, mainEdges, main, options) {
+    const mainLen = polylineLength(main);
+    const tmp = {};
+    const project = (pt) => {
+      let bestD = Infinity, bestS = 0, bestP = null, acc = 0;
+      for (let i = 1; i < main.length; i++) {
+        const a = main[i - 1], b = main[i];
+        const seg = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        const d2 = G.segmentDistance2(pt[0], pt[1], a[0], a[1], b[0], b[1], tmp);
+        if (d2 < bestD) {
+          const t = Math.max(0, Math.min(1, tmp.t));
+          bestD = d2;
+          bestS = acc + t * seg;
+          bestP = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+        }
+        acc += seg;
+      }
+      return { d: Math.sqrt(bestD), s: bestS, p: bestP };
+    };
+    const sub = {
+      nodes: graph.nodes.map((n) => ({ x: n.x, y: n.y, edges: n.edges.filter((e) => !mainEdges.has(e)) })),
+      edges: graph.edges
+    };
+    const maxLen = options.tributaryLength || 3000;
+    const candidates = [];
+    for (let id = 0; id < sub.nodes.length; id++) {
+      if (!sub.nodes[id].edges.length) continue;
+      const join = project([sub.nodes[id].x, sub.nodes[id].y]);
+      if (join.d > 30 || join.s < 200 || join.s > mainLen - 200) continue;
+      const { far, via } = dijkstra(sub, id);
+      if (far === id) continue;
+      const pts = [];
+      for (let n = far; n !== id;) {
+        const e = graph.edges[via.get(n)];
+        const forward = e.a === n;
+        const seq = forward ? e.pts : e.pts.slice().reverse();
+        for (let i = pts.length ? 1 : 0; i < seq.length; i++) pts.push(seq[i]);
+        n = forward ? e.b : e.a;
+      }
+      const len = polylineLength(pts);
+      // Too short, or a side channel whose upstream end is also beside the main river.
+      if (len < 300 || project(pts[0]).d < 80) continue;
+      const cropped = slicePolyline(pts, Math.max(0, len - maxLen), len);
+      cropped[cropped.length - 1] = join.p;
+      candidates.push({ pts: cropped, joinS: join.s, len: Math.min(len, maxLen) });
+    }
+    candidates.sort((a, b) => b.len - a.len);
+    const kept = [];
+    for (const c of candidates) {
+      if (kept.some((k) => Math.abs(k.joinS - c.joinS) < 150)) continue;
+      kept.push(c);
+      if (kept.length === 3) break;
+    }
+    return kept;
+  }
+
+  function slicePolyline(pts, s0, s1) {
+    const out = [];
+    let dist = 0;
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i];
+      const seg = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      const dA = dist, dB = dist + seg;
+      if (dB >= s0 && dA <= s1 && seg > 0) {
+        if (!out.length) {
+          const f = Math.max(0, (s0 - dA) / seg);
+          out.push([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]);
+        }
+        if (dB <= s1) {
+          out.push([b[0], b[1]]);
+        } else {
+          const f = (s1 - dA) / seg;
+          out.push([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]);
+          break;
+        }
+      }
+      dist = dB;
+    }
+    return out;
+  }
+
+  /**
+   * Detect the main river near a map position.
+   * options: { token, searchRadius (m), reachLength (m), signal, onProgress }
+   * Resolves to { coordinates (upstream -> downstream), name, length, cls } or null.
+   */
+  async function detectRiver(center, options) {
+    const z = 14, n = 2 ** z;
+    const mpu = G.metersPerUnit(center[1]);
+    const cx = G.mercX(center[0]), cy = G.mercY(center[1]);
+    const radius = options.searchRadius || 4000;
+    const r = radius / mpu;
+    const tiles = G.tilesCovering({ x0: cx - r, y0: cy - r, x1: cx + r, y1: cy + r }, z);
+    const { tiles: decoded } = await fetchStreetsTiles(tiles, options.token, options);
+
+    const byClass = { river: [], canal: [], stream: [] };
+    const labels = [];
+    decoded.forEach((vt, idx) => {
+      if (!vt) return;
+      const t = tiles[idx];
+      const toMeters = (p, ext) => [((t.x + p[0] / ext) / n) * mpu, ((t.y + p[1] / ext) / n) * mpu];
+      const ww = vt.waterway;
+      if (ww) {
+        for (let i = 0; i < ww.length; i++) {
+          const f = ww.feature(i);
+          const list = byClass[f.properties.class];
+          if (!list || f.type !== 2) continue;
+          for (const part of f.geometry) {
+            for (const clipped of clipLine(part, 0, ww.extent)) list.push(clipped.map((p) => toMeters(p, ww.extent)));
+          }
+        }
+      }
+      const nl = vt.natural_label;
+      if (nl) {
+        for (let i = 0; i < nl.length; i++) {
+          const f = nl.feature(i);
+          const name = f.properties.name_en || f.properties.name;
+          if (!name || !byClass[f.properties.class]) continue;
+          for (const part of f.geometry) for (const p of part) labels.push({ name, cls: f.properties.class, pt: toMeters(p, nl.extent) });
+        }
+      }
+    });
+
+    const cls = byClass.river.length ? 'river' : byClass.canal.length ? 'canal' : byClass.stream.length ? 'stream' : null;
+    if (!cls) return null;
+    const graph = buildGraph(byClass[cls], 8);
+    const centre = [cx * mpu, cy * mpu];
+    const sigma2 = 2 * (radius * 0.35) ** 2;
+    let best = null, bestScore = 0;
+    for (const comp of components(graph)) {
+      let score = 0;
+      for (const eid of comp.edges) {
+        const pts = graph.edges[eid].pts;
+        for (let i = 1; i < pts.length; i++) {
+          const mx = (pts[i][0] + pts[i - 1][0]) / 2 - centre[0];
+          const my = (pts[i][1] + pts[i - 1][1]) / 2 - centre[1];
+          score += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]) * Math.exp(-(mx * mx + my * my) / sigma2);
+        }
+      }
+      if (score > bestScore) { bestScore = score; best = comp; }
+    }
+    if (!best) return null;
+
+    const mainPath = longestPath(graph, best);
+    let path = mainPath.pts;
+    const total = polylineLength(path);
+    // Crop to the requested reach length around the point nearest the view centre.
+    const want = Math.min(total, options.reachLength || 5000);
+    let sNear = 0, dNear = Infinity, acc = 0;
+    const tmp = {};
+    for (let i = 1; i < path.length; i++) {
+      const a = path[i - 1], b = path[i];
+      const seg = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      const d2 = G.segmentDistance2(centre[0], centre[1], a[0], a[1], b[0], b[1], tmp);
+      if (d2 < dNear) { dNear = d2; sNear = acc + Math.max(0, Math.min(1, tmp.t)) * seg; }
+      acc += seg;
+    }
+    let s0 = sNear - want / 2, s1 = sNear + want / 2;
+    if (s0 < 0) { s1 -= s0; s0 = 0; }
+    if (s1 > total) { s0 -= s1 - total; s1 = total; }
+    path = slicePolyline(path, Math.max(0, s0), s1);
+
+    let tolerance = 4;
+    let simple = G.simplify(path, tolerance);
+    while (simple.length > 60) {
+      tolerance *= 1.5;
+      simple = G.simplify(path, tolerance);
+    }
+
+    const nameFor = (pts, exclude) => {
+      let found = null, bestD = 400 * 400;
+      for (const label of labels) {
+        if (label.cls !== cls || label.name === exclude) continue;
+        for (let i = 1; i < pts.length; i++) {
+          const d2 = G.segmentDistance2(label.pt[0], label.pt[1], pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]);
+          if (d2 < bestD) { bestD = d2; found = label.name; }
+        }
+      }
+      return found;
+    };
+    const name = nameFor(simple);
+    const toLngLat = (p) => G.toLngLat([p[0] / mpu, p[1] / mpu]);
+    const tributaries = findTributaries(graph, mainPath.edges, path, options).map((trib) => {
+      let tol = 4;
+      let pts = G.simplify(trib.pts, tol);
+      while (pts.length > 40) {
+        tol *= 1.5;
+        pts = G.simplify(trib.pts, tol);
+      }
+      return { coordinates: pts.map(toLngLat), name: nameFor(pts, name), length: polylineLength(pts), joinS: trib.joinS };
+    });
+
+    return {
+      coordinates: simple.map(toLngLat),
+      name,
+      cls,
+      length: polylineLength(simple),
+      tributaries
+    };
+  }
+
+  function ringCentroid(ring) {
+    let a = 0, cx = 0, cy = 0;
+    for (let i = 0, n = ring.length - 1; i < n; i++) {
+      const f = ring[i][0] * ring[i + 1][1] - ring[i + 1][0] * ring[i][1];
+      a += f;
+      cx += (ring[i][0] + ring[i + 1][0]) * f;
+      cy += (ring[i][1] + ring[i + 1][1]) * f;
+    }
+    if (Math.abs(a) < 1e-9) {
+      let sx = 0, sy = 0;
+      for (const p of ring) { sx += p[0]; sy += p[1]; }
+      return { area: 0, x: sx / ring.length, y: sy / ring.length };
+    }
+    return { area: a / 2, x: cx / (3 * a), y: cy / (3 * a) };
+  }
+
+  /**
+   * Load buildings, roads and facilities inside Mercator bounds.
+   * Resolves to { buildings, roads, facilities, zoom, failures }.
+   */
+  async function loadInfrastructure(bounds, options) {
+    let z = 16;
+    let tiles = G.tilesCovering(bounds, z);
+    while (tiles.length > 64 && z > 14) {
+      z--;
+      tiles = G.tilesCovering(bounds, z);
+    }
+    const n = 2 ** z;
+    const { tiles: decoded, failures } = await fetchStreetsTiles(tiles, options.token, options);
+    const buildings = new Map();
+    const facilities = new Map();
+    const roads = [];
+
+    decoded.forEach((vt, idx) => {
+      if (!vt) return;
+      const t = tiles[idx];
+      const toMerc = (p, ext) => [(t.x + p[0] / ext) / n, (t.y + p[1] / ext) / n];
+
+      const bl = vt.building;
+      if (bl) {
+        const unitM = G.metersPerUnit(G.latOf((t.y + 0.5) / n)) / (bl.extent * n);
+        for (let i = 0; i < bl.length; i++) {
+          const f = bl.feature(i);
+          if (f.type !== 3 || f.properties.underground === 'true') continue;
+          FS.mvt.classifyRings(f.geometry).forEach((poly, pi) => {
+            const c = ringCentroid(poly[0]);
+            if (c.area <= 0) return;
+            const key = f.id !== undefined ? 'i' + f.id + ':' + pi : 'c' + Math.round((t.x + c.x / bl.extent) * 1e7) + ',' + Math.round((t.y + c.y / bl.extent) * 1e7);
+            const areaM2 = c.area * unitM * unitM;
+            const prev = buildings.get(key);
+            if (prev && prev.area >= areaM2) return;
+            buildings.set(key, {
+              merc: toMerc([c.x, c.y], bl.extent),
+              ring: poly[0].map((p) => toMerc(p, bl.extent)),
+              area: areaM2,
+              height: +f.properties.height || null
+            });
+          });
+        }
+      }
+
+      const rd = vt.road;
+      if (rd) {
+        for (let i = 0; i < rd.length; i++) {
+          const f = rd.feature(i);
+          const p = f.properties;
+          if (f.type !== 2 || !ROAD_CLASSES.has(p.class)) continue;
+          if (p.structure === 'bridge' || p.structure === 'tunnel') continue;
+          for (const part of f.geometry) {
+            for (const clipped of clipLine(part, 0, rd.extent)) {
+              roads.push({ cls: p.class, pts: clipped.map((q) => toMerc(q, rd.extent)) });
+            }
+          }
+        }
+      }
+
+      const pl = vt.poi_label;
+      if (pl) {
+        for (let i = 0; i < pl.length; i++) {
+          const f = pl.feature(i);
+          const kind = FACILITY_KINDS[f.properties.class];
+          if (!kind || f.type !== 1) continue;
+          const pt = f.geometry[0][0];
+          if (pt[0] < 0 || pt[1] < 0 || pt[0] > pl.extent || pt[1] > pl.extent) continue;
+          const name = f.properties.name_en || f.properties.name;
+          if (!name) continue;
+          const key = f.id !== undefined ? f.id : name + '|' + pt.join(',');
+          facilities.set(key, { name, kind, maki: f.properties.maki, merc: toMerc(pt, pl.extent) });
+        }
+      }
+    });
+
+    return {
+      buildings: [...buildings.values()],
+      roads,
+      facilities: [...facilities.values()],
+      zoom: z,
+      tileCount: tiles.length,
+      failures
+    };
+  }
+
+  FS.mapdata = { detectRiver, loadInfrastructure, clipLine, buildGraph, streetsUrl };
+})(self.FloodSim = self.FloodSim || {});
+
+
+/* ---- flood-sim/js/hydrograph.js ---- */
+/*
+ * hydrograph.js - incoming river discharge Q(t).
+ *
+ * Shapes:
+ *   wave      smooth synthetic flood wave  Q = Qb + (Qp - Qb) * [(t/Tp) e^(1 - t/Tp)]^m
+ *   triangle  linear rise to the peak, linear recession
+ *   constant  steady discharge
+ *   table     user-supplied "hours, m³/s" rows, linearly interpolated
+ */
+(function (FS) {
+  'use strict';
+
+  const HOUR = 3600;
+
+  /** Presets are expressed as multiples of the channel's bankfull discharge. */
+  const PRESETS = [
+    { id: 'inbank', label: 'High flow that stays in the banks', type: 'wave', base: 0.25, peak: 0.85, timeToPeak: 4, shape: 3, duration: 12 },
+    { id: 'moderate', label: 'Moderate flood', type: 'wave', base: 0.3, peak: 1.8, timeToPeak: 4, shape: 4, duration: 12 },
+    { id: 'severe', label: 'Severe flood', type: 'wave', base: 0.3, peak: 3, timeToPeak: 5, shape: 4, duration: 15 },
+    { id: 'flash', label: 'Flash flood after a cloudburst', type: 'wave', base: 0.25, peak: 4.5, timeToPeak: 1, shape: 10, duration: 6 }
+  ];
+
+  function parseTable(text) {
+    const rows = [];
+    for (const line of String(text || '').split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const parts = trimmed.split(/[\s,;]+/).map(Number);
+      if (parts.length >= 2 && Number.isFinite(parts[0]) && Number.isFinite(parts[1])) {
+        rows.push([Math.max(0, parts[0]), Math.max(0, parts[1])]);
+      }
+    }
+    rows.sort((a, b) => a[0] - b[0]);
+    return rows;
+  }
+
+  function interpolateRows(rows, hours) {
+    if (hours <= rows[0][0]) return rows[0][1];
+    for (let i = 1; i < rows.length; i++) {
+      if (hours <= rows[i][0]) {
+        const [h0, q0] = rows[i - 1];
+        const [h1, q1] = rows[i];
+        return h1 > h0 ? q0 + (q1 - q0) * (hours - h0) / (h1 - h0) : q1;
+      }
+    }
+    return rows[rows.length - 1][1];
+  }
+
+  /**
+   * Build a hydrograph from UI parameters.
+   * Returns { q(tSeconds), duration (s), type, rows? }.
+   */
+  function build(p) {
+    const type = p.type || 'wave';
+    const base = Math.max(0, +p.base || 0);
+    const peak = Math.max(base, +p.peak || 0);
+    const tp = Math.max(0.05, +p.timeToPeak || 1) * HOUR;
+    const m = Math.max(1, +p.shape || 4);
+    let duration = Math.max(0.5, +p.duration || 12) * HOUR;
+    let q;
+
+    if (type === 'constant') {
+      q = () => base;
+    } else if (type === 'triangle') {
+      const tr = Math.max(0.05, +p.recession || (+p.timeToPeak || 1) * 1.67) * HOUR;
+      q = (t) => {
+        if (t <= 0) return base;
+        if (t < tp) return base + (peak - base) * t / tp;
+        if (t < tp + tr) return peak - (peak - base) * (t - tp) / tr;
+        return base;
+      };
+    } else if (type === 'table') {
+      const rows = parseTable(p.table);
+      if (rows.length === 0) {
+        q = () => base;
+      } else {
+        q = (t) => interpolateRows(rows, t / HOUR);
+        if (!(+p.duration > 0)) duration = Math.max(0.5 * HOUR, rows[rows.length - 1][0] * HOUR);
+      }
+    } else {
+      q = (t) => {
+        if (t <= 0) return base;
+        const r = t / tp;
+        return base + (peak - base) * Math.pow(r * Math.exp(1 - r), m);
+      };
+    }
+    return { type, q, duration };
+  }
+
+  /** Sample Q(t) every `step` seconds from 0 to the duration, or to `until` seconds if given. */
+  function sample(hydro, step, until) {
+    const end = until > 0 ? until : hydro.duration;
+    const n = Math.floor(end / step) + 2;
+    const q = new Float64Array(n);
+    for (let i = 0; i < n; i++) q[i] = hydro.q(i * step);
+    return { step, q };
+  }
+
+  function summary(hydro) {
+    const step = Math.max(30, hydro.duration / 2000);
+    let peak = -1, tPeak = 0, volume = 0, prev = hydro.q(0);
+    for (let t = 0; t <= hydro.duration + 1e-6; t += step) {
+      const v = hydro.q(t);
+      if (v > peak) { peak = v; tPeak = t; }
+      if (t > 0) volume += 0.5 * (prev + v) * step;
+      prev = v;
+    }
+    return { peak, timeOfPeak: tPeak, volume, initial: hydro.q(0) };
+  }
+
+  /** Round to two significant figures for friendly preset numbers. */
+  function nice(value) {
+    if (!(value > 0)) return 0;
+    const mag = Math.pow(10, Math.floor(Math.log10(value)) - 1);
+    return Math.round(value / mag) * mag;
+  }
+
+  function presetParams(id, bankfullQ) {
+    const preset = PRESETS.find((p) => p.id === id);
+    if (!preset) return null;
+    const qbf = bankfullQ > 0 ? bankfullQ : 1000;
+    return {
+      type: preset.type,
+      base: nice(preset.base * qbf),
+      peak: nice(preset.peak * qbf),
+      timeToPeak: preset.timeToPeak,
+      shape: preset.shape,
+      duration: preset.duration
+    };
+  }
+
+  FS.hydrograph = { HOUR, PRESETS, parseTable, build, sample, summary, presetParams, nice };
+})(self.FloodSim = self.FloodSim || {});
+
+
+/* ---- flood-sim/js/channel.js ---- */
+/*
+ * channel.js - turns a river network and a DEM into a runnable model:
+ * grid layout, valley-floor snapping, hydro-conditioned channel carving,
+ * roughness, inflow and outlet cells, the gauge cross-section and the
+ * long profile of each river.
+ *
+ * River network (Level 1)
+ *   - Reach 0 is the main river; it leaves the model through the outlet.
+ *   - Every other reach is a tributary whose downstream end joins the main river
+ *     (a confluence). Each reach has its own inflow hydrograph and channel size.
+ *
+ * Channel geometry
+ *   - Rectangular channel of width W, carved D metres below the valley floor.
+ *   - The valley-floor elevation along each centreline is smoothed and forced to
+ *     fall monotonically downstream (isotonic regression), so DEM noise cannot dam
+ *     the river. A tributary's bed never drops below the main river's bed at the
+ *     confluence, so the two channels meet without a trench.
+ *   - Bankfull discharge uses Manning's equation for a wide channel,
+ *     Q = W · D^(5/3) · S^(1/2) / n, which matches how the 2D engine conveys water.
+ */
+(function (FS) {
+  'use strict';
+
+  const G = FS.geo;
+  const NICE_CELLS = [5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50, 60, 80, 100];
+
+  const isPath = (a) => Array.isArray(a) && a.length && typeof a[0][0] === 'number';
+
+  /** Choose grid bounds and resolution around one centreline or a list of them. */
+  function planGrid(paths, opts) {
+    const all = isPath(paths) ? [paths] : paths;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const path of all) {
+      for (const ll of path) {
+        const [x, y] = G.toMerc(ll);
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
+      }
+    }
+    const lat0 = G.latOf((y0 + y1) / 2);
+    const mpu = G.metersPerUnit(lat0);
+    const pad = Math.max(100, +opts.padding || 500) / mpu;
+    x0 -= pad; x1 += pad; y0 -= pad; y1 += pad;
+    const widthM = (x1 - x0) * mpu, heightM = (y1 - y0) * mpu;
+    const maxCells = opts.maxCells || 300000;
+
+    let cell = +opts.cellSize;
+    const auto = !(cell > 0);
+    if (auto) {
+      // Main channel about five cells wide; narrower tributaries at least a little over two.
+      const channelTarget = Math.min((+opts.width || 50) / 5, opts.minWidth > 0 ? opts.minWidth / 2.25 : Infinity);
+      const target = Math.max(Math.sqrt((widthM * heightM) / maxCells), channelTarget, 5);
+      cell = NICE_CELLS.find((c) => c >= target) || NICE_CELLS[NICE_CELLS.length - 1];
+    }
+    const cellMerc = cell / mpu;
+    const nx = Math.ceil((x1 - x0) / cellMerc);
+    const ny = Math.ceil((y1 - y0) / cellMerc);
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    const bx0 = cx - (nx * cellMerc) / 2, by0 = cy - (ny * cellMerc) / 2;
+    return {
+      nx, ny, dx: cell, cellMerc, lat0, mpu, auto,
+      cells: nx * ny,
+      widthM: nx * cell,
+      heightM: ny * cell,
+      bounds: { x0: bx0, y0: by0, x1: bx0 + nx * cellMerc, y1: by0 + ny * cellMerc },
+      demZoom: 14,
+      demRetina: cell < 16
+    };
+  }
+
+  /** Canvas-source corners: top-left, top-right, bottom-right, bottom-left. */
+  function gridCorners(grid) {
+    const b = grid.bounds;
+    return [
+      G.toLngLat([b.x0, b.y0]), G.toLngLat([b.x1, b.y0]),
+      G.toLngLat([b.x1, b.y1]), G.toLngLat([b.x0, b.y1])
+    ];
+  }
+
+  const gridToLngLat = (grid, p) =>
+    G.toLngLat([grid.bounds.x0 + p[0] * grid.cellMerc, grid.bounds.y0 + p[1] * grid.cellMerc]);
+
+  const lngLatToGrid = (grid, ll) => {
+    const m = G.toMerc(ll);
+    return [(m[0] - grid.bounds.x0) / grid.cellMerc, (m[1] - grid.bounds.y0) / grid.cellMerc];
+  };
+
+  /** Bilinear interpolation of a cell-centred field at grid coordinates (x, y). */
+  function bilinear(z, nx, ny, x, y) {
+    let fx = x - 0.5, fy = y - 0.5;
+    if (fx < 0) fx = 0; else if (fx > nx - 1) fx = nx - 1;
+    if (fy < 0) fy = 0; else if (fy > ny - 1) fy = ny - 1;
+    const i = Math.min(nx - 2, Math.floor(fx)), j = Math.min(ny - 2, Math.floor(fy));
+    const tx = fx - i, ty = fy - j;
+    const c = j * nx + i;
+    return (z[c] * (1 - tx) + z[c + 1] * tx) * (1 - ty) + (z[c + nx] * (1 - tx) + z[c + nx + 1] * tx) * ty;
+  }
+
+  function smoothArray(values, radius) {
+    const n = values.length;
+    const out = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      const a = Math.max(0, i - radius), b = Math.min(n - 1, i + radius);
+      let sum = 0;
+      for (let k = a; k <= b; k++) sum += values[k];
+      out[i] = sum / (b - a + 1);
+    }
+    return out;
+  }
+
+  /** Least-squares non-increasing fit (pool-adjacent-violators algorithm). */
+  function isotonicDecreasing(values) {
+    const n = values.length;
+    const level = new Float64Array(n), weight = new Float64Array(n), start = new Int32Array(n);
+    let top = -1;
+    for (let i = 0; i < n; i++) {
+      top++;
+      level[top] = values[i];
+      weight[top] = 1;
+      start[top] = i;
+      while (top > 0 && level[top] > level[top - 1]) {
+        const w = weight[top - 1] + weight[top];
+        level[top - 1] = (level[top - 1] * weight[top - 1] + level[top] * weight[top]) / w;
+        weight[top - 1] = w;
+        top--;
+      }
+    }
+    const out = new Float64Array(n);
+    for (let b = 0; b <= top; b++) {
+      const end = b < top ? start[b + 1] : n;
+      for (let i = start[b]; i < end; i++) out[i] = level[b];
+    }
+    return out;
+  }
+
+  /**
+   * Monotone downstream profile without flat steps: the isotonic fit is a
+   * staircase, so interpolate linearly between the centres of its steps
+   * (extrapolating the end segments) to give a smoothly falling bed.
+   */
+  function monotoneProfile(values) {
+    const n = values.length;
+    const iso = isotonicDecreasing(values);
+    const centres = [], levels = [];
+    let start = 0;
+    for (let i = 1; i <= n; i++) {
+      if (i === n || iso[i] !== iso[start]) {
+        centres.push((start + i - 1) / 2);
+        levels.push(iso[start]);
+        start = i;
+      }
+    }
+    if (centres.length === 1) return iso;
+    const out = new Float64Array(n);
+    let b = 0;
+    for (let i = 0; i < n; i++) {
+      while (b < centres.length - 2 && i > centres[b + 1]) b++;
+      const t = (i - centres[b]) / (centres[b + 1] - centres[b]);
+      out[i] = levels[b] + (levels[b + 1] - levels[b]) * t;
+    }
+    return out;
+  }
+
+  function normalsOf(line, r) {
+    const K = line.length;
+    const out = new Array(K);
+    for (let k = 0; k < K; k++) {
+      const a = line[Math.max(0, k - r)], b = line[Math.min(K - 1, k + r)];
+      let tx = b[0] - a[0], ty = b[1] - a[1];
+      const len = Math.hypot(tx, ty) || 1;
+      tx /= len;
+      ty /= len;
+      out[k] = [-ty, tx];
+    }
+    return out;
+  }
+
+  /** Nudge the centreline sideways onto the lowest ground (the DEM thalweg). */
+  function snapToValley(line, zDem, grid, radiusM) {
+    const { nx, ny, dx } = grid;
+    const R = Math.max(1, radiusM / dx);
+    let pts = line;
+    for (let iter = 0; iter < 2; iter++) {
+      const normals = normalsOf(pts, 4);
+      const offsets = new Float64Array(pts.length);
+      for (let k = 0; k < pts.length; k++) {
+        let bestO = 0, bestZ = Infinity;
+        for (let o = -R; o <= R + 1e-9; o += 0.5) {
+          const x = pts[k][0] + o * normals[k][0], y = pts[k][1] + o * normals[k][1];
+          if (x < 0.5 || y < 0.5 || x > nx - 0.5 || y > ny - 0.5) continue;
+          // A small distance penalty keeps the line from jumping to a parallel low.
+          const e = bilinear(zDem, nx, ny, x, y) + 0.01 * Math.abs(o) * dx;
+          if (e < bestZ) { bestZ = e; bestO = o; }
+        }
+        offsets[k] = bestO;
+      }
+      const sm = smoothArray(offsets, 6);
+      pts = pts.map((p, k) => [p[0] + sm[k] * normals[k][0], p[1] + sm[k] * normals[k][1]]);
+      pts = G.resample(G.smooth(pts, 3, 2), 0.5).pts;
+    }
+    return pts;
+  }
+
+  /** Nearest point on a polyline (grid units) with its along-line distance in cells. */
+  function nearestOnLine(line, s, p) {
+    const tmp = {};
+    let best = { d2: Infinity };
+    for (let k = 0; k < line.length - 1; k++) {
+      const a = line[k], b = line[k + 1];
+      const d2 = G.segmentDistance2(p[0], p[1], a[0], a[1], b[0], b[1], tmp);
+      if (d2 < best.d2) {
+        const t = Math.max(0, Math.min(1, tmp.t));
+        best = { d2, k, t, point: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], s: s[k] + (s[k + 1] - s[k]) * t };
+      }
+    }
+    return best;
+  }
+
+  const interp = (arr, k, t) => arr[k] + (arr[Math.min(k + 1, arr.length - 1)] - arr[k]) * t;
+
+  /** Normal depth of a wide channel: h = (Q·n / (W·√S))^(3/5). */
+  function normalDepth(Q, width, n, slope) {
+    if (!(Q > 0)) return 0;
+    return Math.pow((Q * n) / (width * Math.sqrt(slope)), 0.6);
+  }
+
+  /** Bankfull discharge of a wide channel: Q = W·D^(5/3)·√S / n. */
+  function bankfullDischarge(width, depth, n, slope) {
+    return (width * Math.pow(depth, 5 / 3) * Math.sqrt(slope)) / n;
+  }
+
+  /**
+   * Centreline, valley profile and bed of one reach.
+   * `join` (tributaries only): { line, s, top, bed } of the main reach to connect to.
+   */
+  function traceReach(grid, zDem, reach, opts, join, warnings) {
+    const { nx, ny, dx } = grid;
+    const name = reach.name || 'River';
+    const clampPt = (p) => [Math.min(nx - 0.51, Math.max(0.51, p[0])), Math.min(ny - 0.51, Math.max(0.51, p[1]))];
+    let W = +reach.width;
+    if (W < 1.5 * dx) {
+      warnings.push(`${name}: the channel is narrower than 1.5 grid cells, so it is carved ${Math.round(1.5 * dx)} m wide to keep water flowing along it. Choose a smaller cell size for a narrower channel.`);
+      W = 1.5 * dx;
+    }
+    const D = Math.max(0.2, +reach.depth);
+
+    let pts = reach.coords.map((ll) => lngLatToGrid(grid, ll));
+    let joinInfo = null;
+    if (join) {
+      const sCells = Array.from(join.s, (v) => v / dx);
+      const first = nearestOnLine(join.line, sCells, pts[0]);
+      let last = nearestOnLine(join.line, sCells, pts[pts.length - 1]);
+      if (first.d2 < last.d2) {
+        pts = pts.slice().reverse();
+        last = first;
+        warnings.push(`${name} was drawn starting at the confluence, so its direction was reversed to flow into the main river.`);
+      }
+      const gapM = Math.sqrt(last.d2) * dx;
+      if (gapM > 250) {
+        warnings.push(`${name} ends ${Math.round(gapM)} m from the main river. It was connected to the nearest point on the main channel.`);
+      }
+      joinInfo = last;
+    }
+
+    let line = G.resample(pts, 0.5).pts.map(clampPt);
+    if (joinInfo) line.push(joinInfo.point);
+    if (opts.snap) line = snapToValley(G.resample(line, 0.5).pts, zDem, grid, Math.max(W, 3 * dx)).map(clampPt);
+    if (joinInfo) {
+      // Keep the confluence exactly on the main centreline, blending the last few points towards it.
+      const K0 = line.length;
+      const M = Math.min(K0 - 1, 12);
+      const delta = [joinInfo.point[0] - line[K0 - 1][0], joinInfo.point[1] - line[K0 - 1][1]];
+      for (let i = 0; i < M; i++) {
+        const w = (i + 1) / M;
+        const k = K0 - M + i;
+        line[k] = [line[k][0] + delta[0] * w, line[k][1] + delta[1] * w];
+      }
+    }
+    const res = G.resample(line, 0.5);
+    line = res.pts;
+    const K = line.length;
+    if (K < 12) throw new Error(`${name} is too short for this grid. Draw a longer reach or choose a smaller cell size.`);
+    const sM = Float64Array.from(res.s, (v) => v * dx);
+    const L = sM[K - 1];
+
+    // Valley floor along the centreline -> monotone channel top -> bed.
+    const zRaw = new Float64Array(K);
+    for (let k = 0; k < K; k++) zRaw[k] = bilinear(zDem, nx, ny, line[k][0], line[k][1]);
+    // Spread sudden drops over ~250 m so DEM noise does not carve waterfalls
+    // (a moving average of a falling profile still falls).
+    const top = smoothArray(monotoneProfile(smoothArray(zRaw, 3)), Math.max(1, Math.round(250 / (0.5 * dx))));
+    const minDrop = 1e-4 * 0.5 * dx;
+    if (joinInfo) {
+      // A tributary cannot enter below the main river's channel top at the confluence.
+      const floor = interp(join.top, joinInfo.k, joinInfo.t);
+      for (let k = 0; k < K; k++) top[k] = Math.max(top[k], floor + (L - sM[k]) * 1e-4);
+    }
+    for (let k = 1; k < K; k++) if (top[k] > top[k - 1] - minDrop) top[k] = top[k - 1] - minDrop;
+    const bed = Float64Array.from(top, (v) => v - D);
+    if (joinInfo) {
+      const mainBed = interp(join.bed, joinInfo.k, joinInfo.t);
+      for (let k = 0; k < K; k++) bed[k] = Math.max(bed[k], mainBed + (L - sM[k]) * 1e-4);
+    }
+
+    const nTenth = Math.max(3, Math.round(K / 10));
+    let upMean = 0, downMean = 0;
+    for (let k = 0; k < nTenth; k++) { upMean += zRaw[k]; downMean += zRaw[K - 1 - k]; }
+    upMean /= nTenth;
+    downMean /= nTenth;
+    if (downMean > upMean + 2) {
+      warnings.push(`${name}: the downstream end is ${Math.round(downMean - upMean)} m higher than the upstream end in the elevation data. The flow direction may be reversed.`);
+    }
+
+    const reachSlope = Math.max(1e-4, (top[0] - top[K - 1]) / L);
+    if (reachSlope <= 1.5e-4) {
+      warnings.push(`${name} is almost flat in the elevation data, so water will move slowly and back up easily.`);
+    }
+    return {
+      name, role: join ? 'tributary' : 'main',
+      widthEff: W, depth: D, nChannel: +reach.nChannel,
+      line, sM, L, K, top, bed, zRaw, reachSlope,
+      joinS: joinInfo ? joinInfo.s * dx : null,
+      joinPoint: joinInfo ? joinInfo.point : null
+    };
+  }
+
+  /**
+   * Build the model from the grid, DEM samples and river network.
+   * reaches: [{ coords, width, depth, nChannel, name }] with reaches[0] the main river,
+   *          or a single coordinate array plus opts.width/depth/nChannel (one river).
+   * opts:    { nFloodplain, snap, inletLength }
+   */
+  function buildModel(grid, zDem, reaches, opts) {
+    const { nx, ny, dx } = grid;
+    const N = nx * ny;
+    const warnings = [];
+    const list = isPath(reaches)
+      ? [{ coords: reaches, width: opts.width, depth: opts.depth, nChannel: opts.nChannel, name: opts.name || 'River' }]
+      : reaches;
+    if (!list.length) throw new Error('Add a river first.');
+    const nFloodplain = +opts.nFloodplain;
+    const inletLength = Math.max(4 * dx, +opts.inletLength || 150);
+
+    const traced = [traceReach(grid, zDem, list[0], opts, null, warnings)];
+    for (let r = 1; r < list.length; r++) {
+      if (!list[r].coords || list[r].coords.length < 2) continue;
+      traced.push(traceReach(grid, zDem, list[r], opts, { line: traced[0].line, s: traced[0].sM, top: traced[0].top, bed: traced[0].bed }, warnings));
+    }
+
+    const z = Float32Array.from(zDem);
+    const channelMask = new Uint8Array(N);
+    const manning = new Float32Array(N).fill(nFloodplain);
+    const chanS = new Float32Array(N).fill(-1);
+    const chanBed = new Float32Array(N).fill(Infinity);
+    const chanReach = new Int8Array(N).fill(-1);
+    const localD = new Float32Array(N).fill(Infinity);
+    const localK = new Int32Array(N);
+    const localT = new Float32Array(N);
+    const tmp = {};
+    const outlet = [];
+    const main = traced[0];
+
+    traced.forEach((rc, r) => {
+      const { line, K, sM, L, bed } = rc;
+      const halfW = rc.widthEff / dx / 2;
+      const r2 = halfW * halfW;
+      const pad = Math.ceil(halfW + 1);
+      const touched = [];
+      // Rasterise: cells whose centres lie within W/2 of this centreline.
+      // Upstream ends are flat; the main river's outlet end is flat too.
+      for (let k = 0; k < K - 1; k++) {
+        const ax = line[k][0], ay = line[k][1], bx = line[k + 1][0], by = line[k + 1][1];
+        const i0 = Math.max(0, Math.floor(Math.min(ax, bx) - pad)), i1 = Math.min(nx - 1, Math.ceil(Math.max(ax, bx) + pad));
+        const j0 = Math.max(0, Math.floor(Math.min(ay, by) - pad)), j1 = Math.min(ny - 1, Math.ceil(Math.max(ay, by) + pad));
+        for (let j = j0; j <= j1; j++) {
+          for (let i = i0; i <= i1; i++) {
+            const d2 = G.segmentDistance2(i + 0.5, j + 0.5, ax, ay, bx, by, tmp);
+            if (d2 > r2) continue;
+            if ((k === 0 && tmp.t < 0) || (r === 0 && k === K - 2 && tmp.t > 1)) continue;
+            const c = j * nx + i;
+            if (localD[c] === Infinity) touched.push(c);
+            if (d2 < localD[c]) {
+              localD[c] = d2;
+              localK[c] = k;
+              localT[c] = tmp.t < 0 ? 0 : tmp.t > 1 ? 1 : tmp.t;
+            }
+          }
+        }
+      }
+      const inlet = [];
+      for (const c of touched) {
+        const k = localK[c], t = localT[c];
+        const bedAt = bed[k] + (bed[k + 1] - bed[k]) * t;
+        const s = sM[k] + (sM[k + 1] - sM[k]) * t;
+        localD[c] = Infinity;
+        if (bedAt < z[c]) z[c] = bedAt;
+        channelMask[c] = 1;
+        // Where channels overlap (at a confluence) the deeper channel owns the cell.
+        if (bedAt < chanBed[c]) {
+          chanBed[c] = bedAt;
+          chanReach[c] = r;
+          chanS[c] = s;
+          manning[c] = rc.nChannel;
+        }
+        if (s <= inletLength) inlet.push(c);
+        if (r === 0 && s >= L - 2 * dx) outlet.push(c);
+      }
+      rc.inletCells = inlet;
+    });
+
+    for (const rc of traced) {
+      // Only keep inflow cells the reach still owns (not swallowed by another channel).
+      const r = traced.indexOf(rc);
+      rc.inletCells = Int32Array.from(rc.inletCells.filter((c) => chanReach[c] === r));
+      if (!rc.inletCells.length) throw new Error(`The inflow for ${rc.name} could not be placed. Draw it longer or further from other rivers.`);
+    }
+    if (!outlet.length) throw new Error('The outlet could not be placed. Draw a longer main river inside the model area.');
+    for (let c = 0; c < N; c++) if (chanBed[c] === Infinity) chanBed[c] = 0;
+
+    // Cells that do not count as flooded land: the channels themselves, plus ground just
+    // upstream of each inflow and downstream of the outlet, where water piles up only
+    // because the modelled rivers end there.
+    const notLand = Uint8Array.from(channelMask);
+    const markEnd = (p, q, R) => {
+      let tx = q[0] - p[0], ty = q[1] - p[1];
+      const len = Math.hypot(tx, ty) || 1;
+      tx /= len;
+      ty /= len;
+      const i0 = Math.max(0, Math.floor(p[0] - R)), i1 = Math.min(nx - 1, Math.ceil(p[0] + R));
+      const j0 = Math.max(0, Math.floor(p[1] - R)), j1 = Math.min(ny - 1, Math.ceil(p[1] + R));
+      for (let j = j0; j <= j1; j++) {
+        for (let i = i0; i <= i1; i++) {
+          const vx = i + 0.5 - p[0], vy = j + 0.5 - p[1];
+          if (vx * vx + vy * vy > R * R) continue;
+          if (vx * tx + vy * ty < 0) notLand[j * nx + i] = 1;
+        }
+      }
+    };
+    traced.forEach((rc, r) => {
+      const halfW = rc.widthEff / dx / 2;
+      let R = Math.max(6 * halfW, 400 / dx);
+      if (r > 0) R = Math.min(R, 0.5 * rc.L / dx);
+      markEnd(rc.line[0], rc.line[Math.min(4, rc.K - 1)], R);
+      if (r === 0) markEnd(rc.line[rc.K - 1], rc.line[Math.max(0, rc.K - 5)], R);
+    });
+
+    let kOut = main.K - 1;
+    const outWindow = Math.max(500, 0.2 * main.L);
+    while (kOut > 0 && main.L - main.sM[kOut] < outWindow) kOut--;
+    const outletSlope = Math.max(1e-4, (main.top[kOut] - main.top[main.K - 1]) / Math.max(dx, main.L - main.sM[kOut]));
+
+    const cellAt = (p) => Math.min(ny - 1, Math.floor(p[1])) * nx + Math.min(nx - 1, Math.floor(p[0]));
+    const outReaches = traced.map((rc) => {
+      const stride = Math.max(1, Math.ceil(rc.K / 320));
+      const idx = [];
+      for (let k = 0; k < rc.K; k += stride) idx.push(k);
+      if (idx[idx.length - 1] !== rc.K - 1) idx.push(rc.K - 1);
+      return {
+        name: rc.name,
+        role: rc.role,
+        widthEff: rc.widthEff,
+        depth: rc.depth,
+        nChannel: rc.nChannel,
+        reachLength: rc.L,
+        reachSlope: rc.reachSlope,
+        bankfullQ: bankfullDischarge(rc.widthEff, rc.depth, rc.nChannel, rc.reachSlope),
+        inletCells: rc.inletCells,
+        joinS: rc.joinS,
+        joinLngLat: rc.joinPoint ? gridToLngLat(grid, rc.joinPoint) : null,
+        centerline: {
+          grid: rc.line,
+          lngLat: rc.line.map((p) => gridToLngLat(grid, p)),
+          s: rc.sM, top: rc.top, bed: rc.bed, raw: rc.zRaw
+        },
+        profile: {
+          s: Float64Array.from(idx, (k) => rc.sM[k]),
+          bed: Float64Array.from(idx, (k) => rc.bed[k]),
+          top: Float64Array.from(idx, (k) => rc.top[k]),
+          cells: Int32Array.from(idx, (k) => cellAt(rc.line[k]))
+        }
+      };
+    });
+    const mainOut = outReaches[0];
+    let channelCells = 0;
+    for (let c = 0; c < N; c++) channelCells += channelMask[c];
+
+    return {
+      grid,
+      zDem,
+      z,
+      channelMask,
+      notLand,
+      manning,
+      chanS,
+      chanBed,
+      chanReach,
+      reaches: outReaches,
+      inletCells: mainOut.inletCells,
+      outletCells: Int32Array.from(outlet),
+      widthEff: mainOut.widthEff,
+      depth: mainOut.depth,
+      nChannel: mainOut.nChannel,
+      nFloodplain,
+      reachLength: mainOut.reachLength,
+      reachSlope: mainOut.reachSlope,
+      outletSlope,
+      // The outlet band is two cells long, so each cell drains half a cross-section's worth.
+      outletFactor: 0.5,
+      bankfullQ: mainOut.bankfullQ,
+      channelCells,
+      warnings,
+      centerline: mainOut.centerline,
+      profile: mainOut.profile,
+      channelOutline: G.contour(channelMask, nx, ny, 0.5)
+    };
+  }
+
+  /**
+   * Initial channel depths for steady base flows (normal depth in each reach).
+   * q0: base discharge per reach, or one number for the main river. Below each
+   * confluence the main river also carries that tributary's base flow.
+   */
+  function initialDepths(model, q0) {
+    const flows = typeof q0 === 'number' ? [q0] : q0;
+    const N = model.grid.nx * model.grid.ny;
+    const R = model.reaches;
+    const h0 = new Float32Array(N);
+    const reachDepth = R.map((r, i) => normalDepth(flows[i] || 0, r.widthEff, r.nChannel, r.reachSlope));
+    const joins = R.slice(1).map((r, i) => ({ s: r.joinS, q: flows[i + 1] || 0 })).sort((a, b) => a.s - b.s);
+    const mainDepthAt = (s) => {
+      let Q = flows[0] || 0;
+      for (const j of joins) if (s >= j.s) Q += j.q;
+      return normalDepth(Q, R[0].widthEff, R[0].nChannel, R[0].reachSlope);
+    };
+    for (let c = 0; c < N; c++) {
+      const r = model.chanReach[c];
+      if (r < 0) continue;
+      const hn = r === 0 ? mainDepthAt(model.chanS[c]) : reachDepth[r];
+      if (hn > 0) h0[c] = Math.max(0, model.chanBed[c] + hn - model.z[c]);
+    }
+    return { h0, normalDepth: reachDepth[0] };
+  }
+
+  /** A stream gauge part-way along a reach, with a cross-section across the valley. */
+  function makeGauge(model, reachIndex, fraction) {
+    if (fraction === undefined) { fraction = reachIndex; reachIndex = 0; }
+    const reach = model.reaches[reachIndex] || model.reaches[0];
+    const r = model.reaches.indexOf(reach);
+    const { grid } = model;
+    const { centerline } = reach;
+    const { nx, ny, dx } = grid;
+    const line = centerline.grid;
+    const K = line.length;
+    const k = Math.max(2, Math.min(K - 3, Math.round(fraction * (K - 1))));
+    const p = line[k];
+    let tx = line[k + 2][0] - line[k - 2][0], ty = line[k + 2][1] - line[k - 2][1];
+    const len = Math.hypot(tx, ty) || 1;
+    tx /= len;
+    ty /= len;
+    const nxv = -ty, nyv = tx;
+    const sHere = centerline.s[k];
+    const maxHalf = 2500 / dx;
+    const cells = [];
+    const ends = [];
+    for (const side of [1, -1]) {
+      let lastPt = p;
+      for (let o = side > 0 ? 0 : 0.5; o <= maxHalf; o += 0.5) {
+        const x = p[0] + side * o * nxv, y = p[1] + side * o * nyv;
+        if (x < 0 || y < 0 || x >= nx || y >= ny) break;
+        const c = Math.floor(y) * nx + Math.floor(x);
+        // Stop at a different river, or where this river loops back across the section.
+        if (model.channelMask[c] && o > reach.widthEff / dx &&
+          (model.chanReach[c] !== r || Math.abs(model.chanS[c] - sHere) > 3 * reach.widthEff + 3 * dx)) break;
+        // Stop on valley sides far above the channel top: no flood water reaches there.
+        if (!model.channelMask[c] && model.zDem[c] > centerline.top[k] + 25) break;
+        cells.push(c);
+        lastPt = [x, y];
+      }
+      ends.push(gridToLngLat(grid, lastPt));
+    }
+    const bed = centerline.bed[k];
+    const danger = centerline.top[k];
+    return {
+      reach: r,
+      fraction,
+      k,
+      cell: Math.floor(p[1]) * nx + Math.floor(p[0]),
+      sectionCells: Int32Array.from(cells),
+      tx, ty,
+      spacing: 0.5 * dx,
+      s: sHere,
+      bed,
+      danger,
+      warning: bed + 0.8 * (danger - bed),
+      bankfullQ: bankfullDischarge(reach.widthEff, danger - bed, reach.nChannel, reach.reachSlope),
+      lngLat: gridToLngLat(grid, p),
+      section: [ends[1], ends[0]]
+    };
+  }
+
+  /** Nearest river reach and position along it (0..1) for a clicked map position. */
+  function fractionAt(model, lngLat) {
+    const p = lngLatToGrid(model.grid, lngLat);
+    let best = { reach: 0, fraction: 0, distanceM: Infinity };
+    model.reaches.forEach((reach, r) => {
+      const line = reach.centerline.grid;
+      for (let k = 0; k < line.length; k++) {
+        const d = Math.hypot(line[k][0] - p[0], line[k][1] - p[1]) * model.grid.dx;
+        if (d < best.distanceM) best = { reach: r, fraction: k / (line.length - 1), distanceM: d };
+      }
+    });
+    return best;
+  }
+
+  /** Map buildings, roads and facilities onto model cells (river-bank features use the nearest land cell). */
+  function mapInfrastructure(model, infra) {
+    const { grid, channelMask } = model;
+    const { nx, ny, bounds, cellMerc, dx } = grid;
+    const cellOf = (m) => {
+      const i = Math.floor((m[0] - bounds.x0) / cellMerc), j = Math.floor((m[1] - bounds.y0) / cellMerc);
+      return i < 0 || j < 0 || i >= nx || j >= ny ? -1 : j * nx + i;
+    };
+    const landCell = (c) => {
+      if (c < 0 || !channelMask[c]) return c;
+      const j = (c / nx) | 0, i = c - j * nx;
+      let best = -1, bestD = Infinity;
+      for (let dj = -2; dj <= 2; dj++) {
+        for (let di = -2; di <= 2; di++) {
+          const ii = i + di, jj = j + dj;
+          if (ii < 0 || jj < 0 || ii >= nx || jj >= ny) continue;
+          const cc = jj * nx + ii;
+          if (channelMask[cc]) continue;
+          const d = di * di + dj * dj;
+          if (d < bestD) { bestD = d; best = cc; }
+        }
+      }
+      return best;
+    };
+
+    const buildings = [];
+    for (const b of infra.buildings) {
+      const c = landCell(cellOf(b.merc));
+      if (c < 0) continue;
+      buildings.push({ cell: c, ring: b.ring.map(G.toLngLat), area: b.area });
+    }
+
+    const roads = [];
+    let roadLength = 0;
+    for (const r of infra.roads) {
+      const gpts = r.pts.map((m) => [(m[0] - bounds.x0) / cellMerc, (m[1] - bounds.y0) / cellMerc]);
+      if (gpts.every((p) => p[0] < 0 || p[1] < 0 || p[0] > nx || p[1] > ny)) continue;
+      const rs = G.resample(gpts, 0.5);
+      if (rs.length < 0.25) continue;
+      const cells = new Int32Array(rs.pts.length);
+      for (let k = 0; k < rs.pts.length; k++) {
+        const p = rs.pts[k];
+        cells[k] = p[0] < 0 || p[1] < 0 || p[0] >= nx || p[1] >= ny ? -1 : landCell(Math.floor(p[1]) * nx + Math.floor(p[0]));
+      }
+      const segLen = (rs.length / Math.max(1, rs.pts.length - 1)) * dx;
+      roads.push({ cls: r.cls, cells, segLen, lngLat: rs.pts.map((p) => gridToLngLat(grid, p)) });
+      for (let k = 1; k < cells.length; k++) if (cells[k] >= 0 && cells[k - 1] >= 0) roadLength += segLen;
+    }
+
+    const facilities = [];
+    for (const f of infra.facilities) {
+      const c = landCell(cellOf(f.merc));
+      if (c < 0) continue;
+      facilities.push({ cell: c, name: f.name, kind: f.kind, maki: f.maki, lngLat: G.toLngLat(f.merc) });
+    }
+
+    return { buildings, roads, facilities, roadLength };
+  }
+
+  FS.channel = {
+    planGrid, gridCorners, gridToLngLat, lngLatToGrid, bilinear, buildModel, initialDepths,
+    makeGauge, fractionAt, mapInfrastructure, normalDepth, bankfullDischarge, isotonicDecreasing,
+    monotoneProfile
+  };
+})(self.FloodSim = self.FloodSim || {});
+
+
+/* ---- flood-sim/js/engine.js ---- */
+/*
+ * engine.js - Level 1 hydraulic engine.
+ *
+ * Solves the "local inertial" simplification of the 2D shallow-water
+ * equations (Bates, Horritt & Fewtrell 2010; de Almeida et al. 2012) - the
+ * scheme behind LISFLOOD-FP - on a regular grid:
+ *
+ *   momentum  q' = (q - g·hf·dt·dη/dx) / (1 + g·dt·n²·|q| / hf^(7/3))
+ *   mass      h' = h + dt/dx · (Σ q_in - Σ q_out) + sources
+ *
+ * q   discharge per metre width across a cell face (m²/s)
+ * η   water surface elevation = bed z + depth h (m)
+ * hf  flow depth across a face = max(η) - max(z)
+ * n   Manning roughness (s/m^(1/3))
+ *
+ * Convective acceleration is neglected, which suits gradually varied,
+ * friction-dominated river and floodplain flow. A Froude-number cap and a
+ * volume limiter keep thin films on steep terrain stable; the time step
+ * follows the CFL condition dt = α·dx / sqrt(g·h_max).
+ *
+ * Boundary conditions
+ *   inflow   Q(t) added as a volume source over the first few metres of channel
+ *   outlet   normal-depth sink over the last cross-section of the channel
+ *   edges    free outflow on all four grid edges
+ *
+ * The engine is one self-contained function so it can run as a Blob-URL Web
+ * Worker, which also works when the page is opened from file://.
+ */
+(function (FS) {
+  'use strict';
+
+  function floodEngine(scope) {
+    'use strict';
+
+    const G = 9.81;
+
+    function createModel(cfg) {
+      const nx = cfg.nx | 0, ny = cfg.ny | 0, N = nx * ny;
+      if (nx < 3 || ny < 3) throw new Error('The model grid must be at least 3 × 3 cells.');
+      const dx = +cfg.dx, area = dx * dx, invDx = 1 / dx;
+      const p = cfg.params || {};
+      const alpha = p.alpha > 0 ? p.alpha : 0.7;
+      const hFlow = p.hFlow > 0 ? p.hFlow : 0.001;
+      const hTrack = p.hTrack > 0 ? p.hTrack : 0.001;
+      const floodDepth = p.floodDepth > 0 ? p.floodDepth : 0.1;
+      const froudeMax = p.froudeMax > 0 ? p.froudeMax : 1;
+      const fr2g = froudeMax * froudeMax * G;
+      const dtMax = p.dtMax > 0 ? p.dtMax : 10;
+      const edgeSlopeMin = p.edgeSlopeMin > 0 ? p.edgeSlopeMin : 0.001;
+      const edgeSlopeMax = p.edgeSlopeMax > 0 ? p.edgeSlopeMax : 0.1;
+      const outletSlope = Math.max(1e-4, +p.outletSlope || 0.001);
+      const outletFactor = p.outletFactor > 0 ? p.outletFactor : 1;
+      // de Almeida et al. (2012) flux weighting: blending each face flux with its two
+      // neighbours adds a little numerical diffusion that removes checkerboard oscillations.
+      const theta = p.theta > 0 && p.theta <= 1 ? p.theta : 0.8;
+      const blend = 0.5 * (1 - theta);
+
+      const z = Float64Array.from(cfg.z);
+      const nMan = Float64Array.from(cfg.manning);
+      const channel = cfg.channelMask ? Uint8Array.from(cfg.channelMask) : new Uint8Array(N);
+      const h = new Float64Array(N);
+      const qx = new Float64Array((nx + 1) * ny); // face i of row j sits between cells i-1 and i
+      const qy = new Float64Array(nx * (ny + 1)); // face j of column i sits between rows j-1 and j
+      // Per-row column range that can hold water; ranges only ever grow.
+      const lo = new Int32Array(ny).fill(nx);
+      const hi = new Int32Array(ny).fill(-1);
+      let yOldPrev = new Float64Array(nx), yOldCur = new Float64Array(nx);
+
+      // Inflow sources: each has its own cells and hydrograph (a main river plus tributaries).
+      const sources = (cfg.sources || [{ cells: cfg.inletCells || [], hydrograph: cfg.hydrograph }]).map((s) => ({
+        cells: Int32Array.from(s.cells || []),
+        q: Float64Array.from(s.hydrograph.q),
+        step: +s.hydrograph.step
+      }));
+      const outlet = Int32Array.from(cfg.outletCells || []);
+      const qOutlet = new Float64Array(outlet.length);
+      const gauge = cfg.gauge && cfg.gauge.sectionCells ? cfg.gauge : null;
+      const gaugeCells = gauge ? Int32Array.from(gauge.sectionCells) : null;
+
+
+      let t = -Math.max(0, +cfg.spinup || 0);
+      const tEnd = +cfg.duration;
+
+      // Cells that have ever held water are streamed to the main thread.
+      const tracked = new Uint8Array(N);
+      let trackList = new Int32Array(4096);
+      let trackCount = 0;
+      const arrived = new Uint8Array(N);
+      let arrivalCells = [];
+      let arrivalTimes = [];
+
+      let volIn = 0, volOutlet = 0, volEdge = 0, volClip = 0;
+      let hMax = 0, steps = 0;
+
+      function track(c) {
+        tracked[c] = 1;
+        if (trackCount === trackList.length) {
+          const grown = new Int32Array(trackList.length * 2);
+          grown.set(trackList);
+          trackList = grown;
+        }
+        trackList[trackCount++] = c;
+      }
+
+      function activate(c) {
+        const j = (c / nx) | 0, i = c - j * nx;
+        const i0 = i > 0 ? i - 1 : 0, i1 = i < nx - 1 ? i + 1 : nx - 1;
+        const j0 = j > 0 ? j - 1 : 0, j1 = j < ny - 1 ? j + 1 : ny - 1;
+        for (let r = j0; r <= j1; r++) {
+          if (i0 < lo[r]) lo[r] = i0;
+          if (i1 > hi[r]) hi[r] = i1;
+        }
+      }
+
+      function totalVolume() {
+        let sum = 0;
+        for (let j = 0; j < ny; j++) {
+          const b = hi[j];
+          for (let c = j * nx + lo[j], end = j * nx + b; c <= end; c++) sum += h[c];
+        }
+        return sum * area;
+      }
+
+      function sourceQ(s, time) {
+        const hq = s.q;
+        if (time <= 0) return hq[0];
+        const x = time / s.step;
+        const i = Math.floor(x);
+        if (i >= hq.length - 1) return hq[hq.length - 1];
+        return hq[i] + (hq[i + 1] - hq[i]) * (x - i);
+      }
+
+      function inflowAt(time) {
+        let sum = 0;
+        for (let k = 0; k < sources.length; k++) sum += sourceQ(sources[k], time);
+        return sum;
+      }
+
+      if (cfg.h0) {
+        for (let c = 0; c < N; c++) {
+          const v = +cfg.h0[c];
+          if (v > 0) {
+            h[c] = v;
+            activate(c);
+            if (v >= hTrack) track(c);
+            if (v >= floodDepth) { arrived[c] = 1; arrivalCells.push(c); arrivalTimes.push(t); }
+            if (v > hMax) hMax = v;
+          }
+        }
+      }
+      for (const s of sources) for (let m = 0; m < s.cells.length; m++) activate(s.cells[m]);
+      for (let m = 0; m < outlet.length; m++) activate(outlet[m]);
+      const vol0 = totalVolume();
+
+      // Free-outflow flux (outward positive) through a grid-edge face of cell c.
+      function edgeFlux(qOld, c, cInner, gdt) {
+        const hc = h[c];
+        if (hc <= hFlow) return 0;
+        let slope = (z[cInner] + h[cInner] - z[c] - hc) * invDx;
+        if (!(slope > edgeSlopeMin)) slope = edgeSlopeMin;
+        else if (slope > edgeSlopeMax) slope = edgeSlopeMax;
+        const nf = nMan[c];
+        const q0 = qOld > 0 ? qOld : 0;
+        let q = (q0 + gdt * hc * slope) / (1 + gdt * nf * nf * q0 / (hc * hc * Math.cbrt(hc)));
+        const lim2 = fr2g * hc * hc * hc;
+        if (q * q > lim2) q = Math.sqrt(lim2);
+        return q;
+      }
+
+      function computeDt() {
+        let depth = hMax > 0.01 ? hMax : 0.01;
+        let dt = alpha * dx / Math.sqrt(G * depth);
+        if (dt > dtMax) dt = dtMax;
+        // Each inflow source briefly raises its cells before fluxes act on them.
+        for (let k = 0; k < sources.length; k++) {
+          const s = sources[k];
+          if (!s.cells.length) continue;
+          const d = depth + sourceQ(s, t) * dt / (s.cells.length * area);
+          const dt2 = alpha * dx / Math.sqrt(G * d);
+          if (dt2 < dt) dt = dt2;
+        }
+        return dt;
+      }
+
+      function step(dt) {
+        const gdt = G * dt;
+
+        // 1. Inflow hydrographs, each spread over the upstream end of its own river.
+        for (let k = 0; k < sources.length; k++) {
+          const s = sources[k];
+          const Q = sourceQ(s, t + 0.5 * dt);
+          const cells = s.cells;
+          if (!(Q > 0) || !cells.length) continue;
+          const dh = (Q * dt) / (cells.length * area);
+          for (let m = 0; m < cells.length; m++) {
+            const c = cells[m];
+            const v = h[c] + dh;
+            h[c] = v;
+            if (v >= hTrack && !tracked[c]) track(c);
+          }
+          volIn += Q * dt;
+        }
+
+        // 2a. Momentum on x faces.
+        for (let j = 0; j < ny; j++) {
+          const a = lo[j], b = hi[j];
+          if (b < a) continue;
+          const rowC = j * nx, rowF = j * (nx + 1);
+          const f0 = a > 1 ? a : 1;
+          const f1 = b + 1 < nx - 1 ? b + 1 : nx - 1;
+          let prevOld = qx[rowF + f0 - 1]; // not yet updated this step
+          for (let i = f0; i <= f1; i++) {
+            const cR = rowC + i, cL = cR - 1, k = rowF + i;
+            const q0 = qx[k];
+            const qm = prevOld, qp = qx[k + 1];
+            prevOld = q0;
+            const hL = h[cL], hR = h[cR];
+            if (hL <= 0 && hR <= 0) { qx[k] = 0; continue; }
+            const zL = z[cL], zR = z[cR];
+            const eL = zL + hL, eR = zR + hR;
+            const hf = (eL > eR ? eL : eR) - (zL > zR ? zL : zR);
+            if (hf <= hFlow) { qx[k] = 0; continue; }
+            const nf = 0.5 * (nMan[cL] + nMan[cR]);
+            const qb = qm !== 0 && qp !== 0 ? theta * q0 + blend * (qm + qp) : q0;
+            let q = (qb - gdt * hf * (eR - eL) * invDx) /
+              (1 + gdt * nf * nf * (q0 < 0 ? -q0 : q0) / (hf * hf * Math.cbrt(hf)));
+            const lim2 = fr2g * hf * hf * hf;
+            if (q * q > lim2) q = q > 0 ? Math.sqrt(lim2) : -Math.sqrt(lim2);
+            qx[k] = q;
+          }
+          if (a === 0) qx[rowF] = -edgeFlux(-qx[rowF], rowC, rowC + 1, gdt);
+          if (b === nx - 1) qx[rowF + nx] = edgeFlux(qx[rowF + nx], rowC + nx - 1, rowC + nx - 2, gdt);
+        }
+
+        // 2b. Momentum on y faces (positive = towards increasing row index, i.e. south).
+        let prevRow = -2, prevA = 0, prevB = -1;
+        for (let j = 0; j <= ny; j++) {
+          let a, b;
+          if (j === 0) { a = lo[0]; b = hi[0]; }
+          else if (j === ny) { a = lo[ny - 1]; b = hi[ny - 1]; }
+          else {
+            a = lo[j - 1] < lo[j] ? lo[j - 1] : lo[j];
+            b = hi[j - 1] > hi[j] ? hi[j - 1] : hi[j];
+          }
+          if (b < a) continue;
+          const rowF = j * nx;
+          // Keep this face row's old fluxes: the next row needs them as its upstream neighbour.
+          for (let i = a; i <= b; i++) yOldCur[i] = qy[rowF + i];
+          if (j === 0) {
+            for (let i = a; i <= b; i++) qy[i] = -edgeFlux(-qy[i], i, i + nx, gdt);
+          } else if (j === ny) {
+            const rowC = (ny - 1) * nx;
+            for (let i = a; i <= b; i++) qy[rowF + i] = edgeFlux(qy[rowF + i], rowC + i, rowC + i - nx, gdt);
+          } else {
+            const rowT = (j - 1) * nx;
+            const prevDone = prevRow === j - 1;
+            for (let i = a; i <= b; i++) {
+              const cT = rowT + i, cB = cT + nx, k = rowF + i;
+              const hT = h[cT], hB = h[cB];
+              if (hT <= 0 && hB <= 0) { qy[k] = 0; continue; }
+              const zT = z[cT], zB = z[cB];
+              const eT = zT + hT, eB = zB + hB;
+              const hf = (eT > eB ? eT : eB) - (zT > zB ? zT : zB);
+              if (hf <= hFlow) { qy[k] = 0; continue; }
+              const nf = 0.5 * (nMan[cT] + nMan[cB]);
+              const q0 = yOldCur[i];
+              const qm = prevDone && i >= prevA && i <= prevB ? yOldPrev[i] : qy[k - nx];
+              const qp = qy[k + nx];
+              const qb = qm !== 0 && qp !== 0 ? theta * q0 + blend * (qm + qp) : q0;
+              let q = (qb - gdt * hf * (eB - eT) * invDx) /
+                (1 + gdt * nf * nf * (q0 < 0 ? -q0 : q0) / (hf * hf * Math.cbrt(hf)));
+              const lim2 = fr2g * hf * hf * hf;
+              if (q * q > lim2) q = q > 0 ? Math.sqrt(lim2) : -Math.sqrt(lim2);
+              qy[k] = q;
+            }
+          }
+          const swap = yOldPrev;
+          yOldPrev = yOldCur;
+          yOldCur = swap;
+          prevRow = j;
+          prevA = a;
+          prevB = b;
+        }
+
+        // 3. Volume limiter: a cell cannot export more water than it holds.
+        for (let j = 0; j < ny; j++) {
+          const a = lo[j], b = hi[j];
+          if (b < a) continue;
+          const rowC = j * nx, rowF = j * (nx + 1);
+          for (let i = a; i <= b; i++) {
+            const c = rowC + i, kL = rowF + i, kR = kL + 1, kB = c + nx;
+            const qL = qx[kL], qR = qx[kR], qT = qy[c], qB = qy[kB];
+            let out = 0;
+            if (qL < 0) out -= qL;
+            if (qR > 0) out += qR;
+            if (qT < 0) out -= qT;
+            if (qB > 0) out += qB;
+            if (out === 0) continue;
+            const vOut = out * dt * dx;
+            const vAvail = h[c] * area;
+            if (vOut > vAvail) {
+              const f = vAvail > 0 ? vAvail / vOut : 0;
+              if (qL < 0) qx[kL] = qL * f;
+              if (qR > 0) qx[kR] = qR * f;
+              if (qT < 0) qy[c] = qT * f;
+              if (qB > 0) qy[kB] = qB * f;
+            }
+          }
+        }
+
+        // 4. Continuity.
+        const ddt = dt * invDx, edgeFactor = dx * dt, tNew = t + dt;
+        let hm = 0, bad = false;
+        for (let j = 0; j < ny; j++) {
+          const a = lo[j], b = hi[j];
+          if (b < a) continue;
+          const rowC = j * nx, rowF = j * (nx + 1);
+          for (let i = a; i <= b; i++) {
+            const c = rowC + i, kL = rowF + i;
+            const h0 = h[c];
+            let h1 = h0 + (qx[kL] - qx[kL + 1] + qy[c] - qy[c + nx]) * ddt;
+            if (h1 <= 0) {
+              if (h1 < 0) volClip -= h1 * area;
+              h1 = 0;
+            } else if (h1 !== h1) {
+              bad = true;
+              h1 = 0;
+            }
+            h[c] = h1;
+            if (h1 > hm) hm = h1;
+            if (h0 <= 0 && h1 > 0) activate(c);
+            if (h1 >= hTrack && !tracked[c]) track(c);
+            if (h1 >= floodDepth && !arrived[c]) {
+              arrived[c] = 1;
+              arrivalCells.push(c);
+              arrivalTimes.push(tNew);
+            }
+          }
+          if (a === 0) volEdge -= qx[rowF] * edgeFactor;
+          if (b === nx - 1) volEdge += qx[rowF + nx] * edgeFactor;
+        }
+        for (let i = lo[0], b = hi[0]; i <= b; i++) volEdge -= qy[i] * edgeFactor;
+        for (let i = lo[ny - 1], b = hi[ny - 1], rowF = ny * nx; i <= b; i++) volEdge += qy[rowF + i] * edgeFactor;
+
+        // 5. Outlet: normal-depth sink across the last channel cross-section.
+        for (let m = 0; m < outlet.length; m++) {
+          const c = outlet[m];
+          const hc = h[c];
+          if (hc <= hFlow) { qOutlet[m] = 0; continue; }
+          const nf = nMan[c];
+          const q0 = qOutlet[m];
+          let q = (q0 + gdt * hc * outletSlope) / (1 + gdt * nf * nf * q0 / (hc * hc * Math.cbrt(hc)));
+          const lim2 = fr2g * hc * hc * hc;
+          if (q * q > lim2) q = Math.sqrt(lim2);
+          let vol = q * dx * dt * outletFactor;
+          const avail = hc * area;
+          if (vol > avail) { vol = avail; q = vol / (dx * dt * outletFactor); }
+          qOutlet[m] = q;
+          h[c] = hc - vol / area;
+          volOutlet += vol;
+        }
+
+        if (bad || hm > 5000) {
+          throw new Error('The simulation became numerically unstable at t = ' + Math.round(t) +
+            ' s. Try a larger cell size, a lower time-step factor or a lower Froude limit.');
+        }
+        hMax = hm;
+        t = tNew;
+        steps++;
+      }
+
+      // Discharge through the gauge cross-section (m³/s, positive downstream).
+      function sectionFlux() {
+        if (!gaugeCells) return 0;
+        let sum = 0;
+        for (let m = 0; m < gaugeCells.length; m++) {
+          const c = gaugeCells[m];
+          if (h[c] <= hFlow) continue;
+          const j = (c / nx) | 0, i = c - j * nx;
+          const kL = j * (nx + 1) + i;
+          const qcx = 0.5 * (qx[kL] + qx[kL + 1]);
+          const qcy = 0.5 * (qy[c] + qy[c + nx]);
+          sum += (qcx * gauge.tx + qcy * gauge.ty) * gauge.spacing;
+        }
+        return sum;
+      }
+
+      const clamp16 = (v) => (v > 32767 ? 32767 : v < -32767 ? -32767 : v);
+      let last = { t, volOutlet: 0, volEdge: 0, trackSent: 0, steps: 0 };
+
+      // Flow depth across the face shared by cells a and b (0 when too shallow to flow).
+      function faceDepth(a, b) {
+        const ea = z[a] + h[a], eb = z[b] + h[b];
+        const d = (ea > eb ? ea : eb) - (z[a] > z[b] ? z[a] : z[b]);
+        return d > hFlow ? d : 0;
+      }
+
+      /**
+       * Cell velocity as discharge-weighted face velocity: u = (qL + qR) / (hfL + hfR).
+       * Dividing face fluxes by the face flow depth (not the cell depth) keeps
+       * velocities meaningful where water spills over a terrain step into a shallow cell.
+       */
+      function cellVelocity(c, out) {
+        const j = (c / nx) | 0, i = c - j * nx;
+        const kL = j * (nx + 1) + i;
+        const hc = h[c] > hFlow ? h[c] : 0;
+        const dL = i > 0 ? faceDepth(c - 1, c) : hc;
+        const dR = i < nx - 1 ? faceDepth(c, c + 1) : hc;
+        const dT = j > 0 ? faceDepth(c - nx, c) : hc;
+        const dB = j < ny - 1 ? faceDepth(c, c + nx) : hc;
+        let u = dL + dR > 0 ? (qx[kL] + qx[kL + 1]) / (dL + dR) : 0;
+        let v = dT + dB > 0 ? (qy[c] + qy[c + nx]) / (dT + dB) : 0;
+        const dMax = Math.max(dL, dR, dT, dB, hc);
+        const vMax = (froudeMax + 1) * Math.sqrt(G * dMax);
+        const speed = Math.sqrt(u * u + v * v);
+        if (speed > vMax) { u *= vMax / speed; v *= vMax / speed; }
+        out.u = u;
+        out.v = v;
+        return out;
+      }
+      const velTmp = { u: 0, v: 0 };
+
+      /** Build an output frame of the current state (compact, transferable arrays). */
+      function snapshot() {
+        const K = trackCount;
+        const hArr = new Uint16Array(K), uArr = new Int16Array(K), vArr = new Int16Array(K);
+        let floodArea = 0, floodVolume = 0, floodMaxDepth = 0, wetArea = 0;
+        let maxVelocity = 0, channelMaxDepth = 0;
+        const hazard = [0, 0, 0, 0];
+        for (let m = 0; m < K; m++) {
+          const c = trackList[m];
+          const hc = h[c];
+          const mm = Math.round(hc * 1000);
+          hArr[m] = mm > 65535 ? 65535 : mm;
+          if (hc < hTrack) continue;
+          cellVelocity(c, velTmp);
+          const u = velTmp.u, v = velTmp.v;
+          uArr[m] = clamp16(Math.round(u * 100));
+          vArr[m] = clamp16(Math.round(v * 100));
+          if (hc >= floodDepth) {
+            const speed = Math.sqrt(u * u + v * v);
+            wetArea += area;
+            if (speed > maxVelocity) maxVelocity = speed;
+            if (channel[c]) {
+              if (hc > channelMaxDepth) channelMaxDepth = hc;
+            } else {
+              floodArea += area;
+              floodVolume += hc * area;
+              if (hc > floodMaxDepth) floodMaxDepth = hc;
+              // Simplified flood hazard rating HR = d(v + 0.5) + DF (Defra/EA FD2320).
+              const rating = hc * (speed + 0.5) + (hc > 0.25 ? 0.5 : 0);
+              hazard[rating < 0.75 ? 0 : rating < 1.25 ? 1 : rating < 2 ? 2 : 3] += area;
+            }
+          }
+        }
+        const interval = t - last.t;
+        const volume = totalVolume();
+        const stats = {
+          t,
+          inflow: inflowAt(t),
+          inflows: sources.map((s) => sourceQ(s, t)),
+          outletFlow: interval > 0 ? (volOutlet - last.volOutlet) / interval : 0,
+          edgeFlow: interval > 0 ? (volEdge - last.volEdge) / interval : 0,
+          gaugeFlow: sectionFlux(),
+          gaugeDepth: gauge ? h[gauge.cell] : 0,
+          gaugeStage: gauge ? z[gauge.cell] + h[gauge.cell] : 0,
+          volume,
+          volIn,
+          volOut: volOutlet + volEdge,
+          volStart: vol0,
+          massError: (vol0 + volIn - volOutlet - volEdge - volume) / Math.max(1, vol0 + volIn),
+          floodArea, floodVolume, floodMaxDepth,
+          floodMeanDepth: floodArea > 0 ? floodVolume / floodArea : 0,
+          wetArea, maxVelocity, channelMaxDepth, hazard,
+          steps,
+          meanDt: steps > last.steps ? interval / (steps - last.steps) : 0
+        };
+        const frame = {
+          t, K,
+          newTracked: trackList.slice(last.trackSent, K),
+          h: hArr, u: uArr, v: vArr,
+          arrivals: Int32Array.from(arrivalCells),
+          arrivalTimes: Float32Array.from(arrivalTimes),
+          stats
+        };
+        arrivalCells = [];
+        arrivalTimes = [];
+        last = { t, volOutlet, volEdge, trackSent: K, steps };
+        return frame;
+      }
+
+      return {
+        tEnd,
+        time: () => t,
+        setTime: (v) => { t = v; },
+        computeDt,
+        step,
+        snapshot,
+        cellVelocity,
+        inflowAt,
+        totalVolume,
+        state: () => ({ h, qx, qy, lo, hi, z }),
+        info: () => ({ nx, ny, cells: N, dx, steps, tracked: trackCount, vol0 })
+      };
+    }
+
+    // ------------------------------------------------------------------
+    // Worker messaging: compute ahead of playback and stream frames.
+    // ------------------------------------------------------------------
+    let model = null;
+    let running = false;
+    let frameInterval = 60;
+    let nextFrameT = 0;
+    let lastProgress = 0;
+    const post = (msg, transfer) => scope.postMessage(msg, transfer || []);
+    const channel = typeof MessageChannel !== 'undefined' ? new MessageChannel() : null;
+    const schedule = () => (channel ? channel.port2.postMessage(0) : setTimeout(loop, 0));
+    if (channel) channel.port1.onmessage = () => loop();
+
+    function emitFrame() {
+      const f = model.snapshot();
+      post({ type: 'frame', frame: f },
+        [f.newTracked.buffer, f.h.buffer, f.u.buffer, f.v.buffer, f.arrivals.buffer, f.arrivalTimes.buffer]);
+    }
+
+    function loop() {
+      if (!running || !model) return;
+      const wall0 = performance.now();
+      const sim0 = model.time();
+      try {
+        while (performance.now() - wall0 < 25) {
+          for (let s = 0; s < 10; s++) {
+            const target = Math.min(nextFrameT, model.tEnd);
+            let dt = model.computeDt();
+            if (!(dt > 0)) throw new Error('The time step collapsed to zero; the model is unstable.');
+            const remaining = target - model.time();
+            if (dt >= remaining) dt = remaining;
+            if (dt > 0) model.step(dt);
+            if (model.time() >= target - 1e-7) {
+              model.setTime(target);
+              emitFrame();
+              nextFrameT = target + frameInterval;
+              if (target >= model.tEnd) {
+                running = false;
+                post({ type: 'done', info: model.info() });
+                return;
+              }
+            }
+          }
+        }
+      } catch (err) {
+        running = false;
+        post({ type: 'error', message: err && err.message ? err.message : String(err) });
+        return;
+      }
+      const now = performance.now();
+      if (now - lastProgress > 120) {
+        lastProgress = now;
+        post({ type: 'progress', t: model.time(), simPerWall: (model.time() - sim0) / ((now - wall0) / 1000), info: model.info() });
+      }
+      schedule();
+    }
+
+    scope.onmessage = function (event) {
+      const msg = event.data || {};
+      if (msg.type === 'init') {
+        running = false;
+        try {
+          model = createModel(msg.config);
+          frameInterval = Math.max(1, +msg.config.frameInterval || 60);
+          nextFrameT = 0;
+          post({ type: 'ready', info: model.info() });
+        } catch (err) {
+          model = null;
+          post({ type: 'error', message: err && err.message ? err.message : String(err) });
+        }
+      } else if (msg.type === 'start') {
+        if (model && !running) { running = true; schedule(); }
+      } else if (msg.type === 'pause') {
+        running = false;
+      } else if (msg.type === 'dispose') {
+        running = false;
+        model = null;
+      }
+    };
+
+    scope.createModel = createModel;
+  }
+
+  FS.engine = {
+    source: floodEngine,
+    createWorker() {
+      const code = '(' + floodEngine.toString() + ')(self);';
+      const url = URL.createObjectURL(new Blob([code], { type: 'text/javascript' }));
+      const worker = new Worker(url);
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+      return worker;
+    }
+  };
+})(self.FloodSim = self.FloodSim || {});
+
+
+/* ---- flood-sim/js/simulation.js ---- */
+/*
+ * simulation.js - runs the engine in a Web Worker, keeps the frames it streams
+ * back, and rebuilds the flood state at any playback time by interpolating
+ * between frames. The worker computes ahead of playback, like video buffering.
+ */
+(function (FS) {
+  'use strict';
+
+  const NICE_INTERVALS = [30, 60, 120, 180, 300, 600, 900, 1200, 1800];
+
+  /** Frame spacing that gives roughly `maxFrames` frames over the event. */
+  function frameIntervalFor(duration, maxFrames) {
+    const target = duration / Math.max(20, maxFrames || 360);
+    return NICE_INTERVALS.find((v) => v >= target) || NICE_INTERVALS[NICE_INTERVALS.length - 1];
+  }
+
+  function createHost(onMessage, inline) {
+    try {
+      if (inline) throw new Error('inline requested');
+      const worker = FS.engine.createWorker();
+      worker.onmessage = (e) => onMessage(e.data);
+      worker.onerror = (e) => {
+        if (e.preventDefault) e.preventDefault();
+        onMessage({ type: 'error', message: e.message || 'The simulation worker stopped unexpectedly.' });
+      };
+      return { post: (msg) => worker.postMessage(msg), terminate: () => worker.terminate(), inWorker: true };
+    } catch (err) {
+      // Workers unavailable: run the same engine on this thread in short slices.
+      const scope = { postMessage: (msg) => setTimeout(() => onMessage(msg), 0), onmessage: null };
+      FS.engine.source(scope);
+      let alive = true;
+      return {
+        post: (msg) => { if (alive) scope.onmessage({ data: msg }); },
+        terminate: () => { alive = false; scope.onmessage({ data: { type: 'dispose' } }); },
+        inWorker: false
+      };
+    }
+  }
+
+  /** Append-only store of streamed frames (sparse: only cells that have held water). */
+  class FrameStore {
+    constructor(cellCount, memoryBytes) {
+      this.N = cellCount;
+      this.memoryBytes = memoryBytes || 240 * 1024 * 1024;
+      this.cells = new Int32Array(8192);
+      this.count = 0;
+      this.frames = [];
+      this.arrival = new Float32Array(cellCount).fill(NaN);
+      this.bytes = 0;
+      this.decimated = 0;
+    }
+
+    add(frame) {
+      const add = frame.newTracked;
+      if (this.count + add.length > this.cells.length) {
+        let size = this.cells.length;
+        while (size < this.count + add.length) size *= 2;
+        const grown = new Int32Array(size);
+        grown.set(this.cells.subarray(0, this.count));
+        this.cells = grown;
+      }
+      this.cells.set(add, this.count);
+      this.count += add.length;
+      for (let i = 0; i < frame.arrivals.length; i++) this.arrival[frame.arrivals[i]] = frame.arrivalTimes[i];
+      this.frames.push({ t: frame.t, K: frame.K, h: frame.h, u: frame.u, v: frame.v, stats: frame.stats });
+      this.bytes += frame.h.byteLength + frame.u.byteLength + frame.v.byteLength;
+      if (this.bytes > this.memoryBytes && this.frames.length > 40) this.decimate();
+    }
+
+    /** Drop every second frame (keeping the first and last) to stay inside the memory budget. */
+    decimate() {
+      const kept = [];
+      let bytes = 0;
+      this.frames.forEach((f, i) => {
+        if (i % 2 === 0 || i === this.frames.length - 1) {
+          kept.push(f);
+          bytes += f.h.byteLength + f.u.byteLength + f.v.byteLength;
+        }
+      });
+      this.frames = kept;
+      this.bytes = bytes;
+      this.decimated++;
+    }
+
+    get length() { return this.frames.length; }
+    get lastT() { return this.frames.length ? this.frames[this.frames.length - 1].t : -Infinity; }
+
+    /** Index of the last frame at or before time t. */
+    indexAt(t) {
+      const f = this.frames;
+      if (!f.length || t <= f[0].t) return 0;
+      let lo = 0, hi = f.length - 1;
+      if (t >= f[hi].t) return hi;
+      while (hi - lo > 1) {
+        const mid = (lo + hi) >> 1;
+        if (f[mid].t <= t) lo = mid; else hi = mid;
+      }
+      return lo;
+    }
+  }
+
+  function lerpStats(a, b, f) {
+    if (f <= 0 || a === b) return a;
+    if (f >= 1) return b;
+    const out = {};
+    for (const key in a) {
+      const va = a[key], vb = b[key];
+      if (typeof va === 'number') out[key] = va + (vb - va) * f;
+      else if (Array.isArray(va)) out[key] = va.map((x, i) => x + (vb[i] - x) * f);
+      else out[key] = va;
+    }
+    return out;
+  }
+
+  /** Full-grid flood state at one moment, rebuilt from the frame store. */
+  class FloodState {
+    constructor(cellCount) {
+      this.h = new Float32Array(cellCount);
+      this.u = new Float32Array(cellCount);
+      this.v = new Float32Array(cellCount);
+      this.K = 0;
+      this.t = NaN;
+      this.stats = null;
+      this.frameIndex = -1;
+    }
+
+    fill(store, t) {
+      const frames = store.frames;
+      if (!frames.length) return false;
+      const i = store.indexAt(t);
+      const a = frames[i];
+      const b = frames[Math.min(i + 1, frames.length - 1)];
+      const tc = Math.max(a.t, Math.min(b.t, t));
+      const f = b.t > a.t ? (tc - a.t) / (b.t - a.t) : 0;
+      const Kb = b.K, Ka = a.K;
+      const cells = store.cells;
+      const { h, u, v } = this;
+      for (let m = 0; m < Kb; m++) {
+        const c = cells[m];
+        const ha = m < Ka ? a.h[m] : 0, ua = m < Ka ? a.u[m] : 0, va = m < Ka ? a.v[m] : 0;
+        h[c] = (ha + (b.h[m] - ha) * f) * 0.001;
+        u[c] = (ua + (b.u[m] - ua) * f) * 0.01;
+        v[c] = (va + (b.v[m] - va) * f) * 0.01;
+      }
+      // Cells first wetted after this moment must read as dry when scrubbing backwards.
+      for (let m = Kb; m < this.K; m++) {
+        const c = cells[m];
+        h[c] = 0; u[c] = 0; v[c] = 0;
+      }
+      this.K = Kb;
+      this.t = tc;
+      this.frameIndex = i;
+      this.stats = lerpStats(a.stats, b.stats, f);
+      return true;
+    }
+  }
+
+  /** Highest depth reached at each cell up to a playback time (built incrementally). */
+  class PeakEnvelope {
+    constructor(cellCount) {
+      this.h = new Float32Array(cellCount);
+      this.upTo = -1;
+      this.K = 0;
+    }
+
+    update(store, state) {
+      const target = state.frameIndex;
+      if (target < this.upTo) this.reset();
+      const cells = store.cells;
+      for (let i = this.upTo + 1; i <= target; i++) {
+        const fr = store.frames[i];
+        for (let m = 0; m < fr.K; m++) {
+          const d = fr.h[m] * 0.001;
+          const c = cells[m];
+          if (d > this.h[c]) this.h[c] = d;
+        }
+        if (fr.K > this.K) this.K = fr.K;
+      }
+      this.upTo = Math.max(this.upTo, target);
+      for (let m = 0; m < state.K; m++) {
+        const c = cells[m];
+        if (state.h[c] > this.h[c]) this.h[c] = state.h[c];
+      }
+      if (state.K > this.K) this.K = state.K;
+    }
+
+    reset() {
+      this.h.fill(0);
+      this.upTo = -1;
+      this.K = 0;
+    }
+  }
+
+  /** A simulation run: worker lifecycle plus the frames it has produced. */
+  class Simulation {
+    constructor(engineConfig, options, handlers) {
+      this.config = engineConfig;
+      this.duration = engineConfig.duration;
+      this.spinup = engineConfig.spinup;
+      this.handlers = handlers || {};
+      this.store = new FrameStore(engineConfig.nx * engineConfig.ny, options.memoryBytes);
+      this.status = 'starting';
+      this.computeT = -engineConfig.spinup;
+      this.simPerWall = 0;
+      this.error = null;
+      this.startedAt = performance.now();
+      this.host = createHost((msg) => this.onMessage(msg));
+      this.host.post({ type: 'init', config: engineConfig });
+    }
+
+    onMessage(msg) {
+      if (this.status === 'disposed') return;
+      const h = this.handlers;
+      // If the worker cannot even start (some browsers block Blob workers on file:// pages),
+      // run the same engine on this thread instead.
+      if (msg.type === 'error' && this.status === 'starting' && this.host.inWorker && !this.retriedInline) {
+        this.retriedInline = true;
+        console.warn('Simulation worker failed to start, running on the main thread:', msg.message);
+        this.host.terminate();
+        this.host = createHost((m) => this.onMessage(m), true);
+        this.host.post({ type: 'init', config: this.config });
+        return;
+      }
+      if (msg.type === 'ready') {
+        this.status = 'running';
+        this.host.post({ type: 'start' });
+      } else if (msg.type === 'progress') {
+        this.computeT = Math.max(this.computeT, msg.t);
+        this.simPerWall = msg.simPerWall;
+        if (h.onProgress) h.onProgress(this);
+      } else if (msg.type === 'frame') {
+        this.store.add(msg.frame);
+        this.computeT = Math.max(this.computeT, msg.frame.t);
+        if (h.onFrame) h.onFrame(this, msg.frame);
+      } else if (msg.type === 'done') {
+        this.status = 'done';
+        this.wallSeconds = (performance.now() - this.startedAt) / 1000;
+        if (h.onDone) h.onDone(this);
+      } else if (msg.type === 'error') {
+        this.status = 'error';
+        this.error = msg.message;
+        if (h.onError) h.onError(this, msg.message);
+      }
+    }
+
+    get available() { return this.store.lastT; }
+    get finished() { return this.status === 'done'; }
+
+    dispose() {
+      this.status = 'disposed';
+      this.host.terminate();
+    }
+  }
+
+  /** Playback clock in simulated seconds, limited to what has been computed. */
+  class Playback {
+    constructor(speed) {
+      this.t = 0;
+      this.speed = speed;
+      this.playing = false;
+      this.buffering = false;
+      this.last = null;
+    }
+
+    play() { this.playing = true; this.last = null; }
+    pause() { this.playing = false; this.buffering = false; }
+    seek(t) { this.t = t; this.last = null; }
+
+    advance(now, available, duration) {
+      if (!this.playing) { this.last = now; return false; }
+      if (this.last === null) { this.last = now; return false; }
+      const dt = Math.min(0.25, (now - this.last) / 1000);
+      this.last = now;
+      let t = this.t + dt * this.speed;
+      this.buffering = false;
+      if (t >= duration) { t = duration; this.playing = false; }
+      if (t > available) { t = Math.max(this.t, available); this.buffering = true; }
+      const changed = t !== this.t;
+      this.t = t;
+      return changed;
+    }
+  }
+
+  FS.simulation = { Simulation, FrameStore, FloodState, PeakEnvelope, Playback, frameIntervalFor };
+})(self.FloodSim = self.FloodSim || {});
+
+
+/* ---- flood-sim/js/impacts.js ---- */
+/*
+ * impacts.js - which buildings, roads and facilities the flood reaches.
+ */
+(function (FS) {
+  'use strict';
+
+  const EMPTY = { type: 'FeatureCollection', features: [] };
+
+  class Impacts {
+    constructor(mapped, thresholds) {
+      this.buildings = mapped.buildings;
+      this.roads = mapped.roads;
+      this.facilities = mapped.facilities;
+      this.totalRoadM = mapped.roadLength;
+      this.th = thresholds;
+    }
+
+    get isEmpty() {
+      return !this.buildings.length && !this.roads.length && !this.facilities.length;
+    }
+
+    /** Counts for the current depth field and the peak envelope so far. */
+    evaluate(depth, peak) {
+      const th = this.th;
+      let buildingsNow = 0, buildingsPeak = 0;
+      for (const b of this.buildings) {
+        if (depth[b.cell] >= th.buildingDepth) buildingsNow++;
+        if (peak[b.cell] >= th.buildingDepth) buildingsPeak++;
+      }
+      let roadFloodedM = 0, roadClosedM = 0;
+      for (const r of this.roads) {
+        const cells = r.cells;
+        for (let k = 1; k < cells.length; k++) {
+          const a = cells[k - 1], b = cells[k];
+          if (a < 0 || b < 0) continue;
+          const d = Math.max(depth[a], depth[b]);
+          if (d >= th.roadFlooded) roadFloodedM += r.segLen;
+          if (d >= th.roadClosed) roadClosedM += r.segLen;
+        }
+      }
+      const facilities = [];
+      for (const f of this.facilities) {
+        if (peak[f.cell] >= th.buildingDepth) {
+          facilities.push({ name: f.name, kind: f.kind, now: depth[f.cell], peak: peak[f.cell] });
+        }
+      }
+      facilities.sort((a, b) => b.now - a.now || b.peak - a.peak);
+      return { buildingsNow, buildingsPeak, roadFloodedM, roadClosedM, facilities };
+    }
+
+    /** Map features for buildings and facilities the water has reached, and flooded road runs. */
+    features(depth, peak) {
+      const th = this.th;
+      const buildings = [];
+      for (const b of this.buildings) {
+        if (peak[b.cell] < th.buildingDepth) continue;
+        const wet = depth[b.cell] >= th.buildingDepth;
+        buildings.push({
+          type: 'Feature',
+          properties: { wet, depth: Math.round(depth[b.cell] * 100) / 100 },
+          geometry: { type: 'Polygon', coordinates: [b.ring] }
+        });
+      }
+
+      const flooded = [], closed = [];
+      for (const r of this.roads) {
+        const cells = r.cells;
+        let run = null, runClosed = false;
+        const flush = () => {
+          if (run && run.length > 1) (runClosed ? closed : flooded).push(run);
+          run = null;
+        };
+        for (let k = 1; k < cells.length; k++) {
+          const a = cells[k - 1], b = cells[k];
+          const d = a < 0 || b < 0 ? 0 : Math.max(depth[a], depth[b]);
+          if (d < th.roadFlooded) { flush(); continue; }
+          const isClosed = d >= th.roadClosed;
+          if (run && isClosed !== runClosed) flush();
+          if (!run) { run = [r.lngLat[k - 1]]; runClosed = isClosed; }
+          run.push(r.lngLat[k]);
+        }
+        flush();
+      }
+      const roads = [];
+      if (flooded.length) roads.push({ type: 'Feature', properties: { closed: false }, geometry: { type: 'MultiLineString', coordinates: flooded } });
+      if (closed.length) roads.push({ type: 'Feature', properties: { closed: true }, geometry: { type: 'MultiLineString', coordinates: closed } });
+
+      const facilities = [];
+      for (const f of this.facilities) {
+        if (peak[f.cell] < th.buildingDepth) continue;
+        facilities.push({
+          type: 'Feature',
+          properties: { name: f.name, wet: depth[f.cell] >= th.buildingDepth },
+          geometry: { type: 'Point', coordinates: f.lngLat }
+        });
+      }
+
+      return {
+        buildings: { type: 'FeatureCollection', features: buildings },
+        roads: { type: 'FeatureCollection', features: roads },
+        facilities: { type: 'FeatureCollection', features: facilities }
+      };
+    }
+  }
+
+  FS.impacts = { Impacts, EMPTY };
+})(self.FloodSim = self.FloodSim || {});
+
+
+/* ---- flood-sim/js/colors.js ---- */
+/*
+ * colors.js - colour ramps for the flood raster and its legends.
+ *
+ * Depth and peak depth use one blue hue (light = shallow, dark = deep),
+ * speed a single orange hue, arrival time a single violet hue (dark = early),
+ * and hazard four ordered classes from caution yellow to extreme maroon.
+ */
+(function (FS) {
+  'use strict';
+
+  function hexToRgb(hex) {
+    const v = parseInt(hex.slice(1), 16);
+    return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
+  }
+
+  /**
+   * A 256-entry RGB lookup table over [0, max]. `scale` 'sqrt' spends more
+   * colours on small values (shallow water matters most for hazard).
+   */
+  function makeRamp(def) {
+    const stops = def.stops.map(([v, hex]) => [v, hexToRgb(hex)]);
+    const max = stops[stops.length - 1][0];
+    const lut = new Uint8ClampedArray(256 * 3);
+    const toT = def.scale === 'sqrt' ? (v) => Math.sqrt(v / max) : (v) => v / max;
+    for (let i = 0; i < 256; i++) {
+      const t = i / 255;
+      const value = def.scale === 'sqrt' ? t * t * max : t * max;
+      let k = 0;
+      while (k < stops.length - 2 && value > stops[k + 1][0]) k++;
+      const [v0, c0] = stops[k];
+      const [v1, c1] = stops[k + 1];
+      const f = v1 > v0 ? Math.max(0, Math.min(1, (value - v0) / (v1 - v0))) : 0;
+      lut[i * 3] = c0[0] + (c1[0] - c0[0]) * f;
+      lut[i * 3 + 1] = c0[1] + (c1[1] - c0[1]) * f;
+      lut[i * 3 + 2] = c0[2] + (c1[2] - c0[2]) * f;
+    }
+    return {
+      ...def,
+      max,
+      lut,
+      index: (v) => {
+        const t = toT(v < 0 ? 0 : v > max ? max : v);
+        return Math.round(t * 255);
+      },
+      /** CSS gradient across the legend bar, sampled in display space. */
+      gradient: () => {
+        const parts = [];
+        for (let i = 0; i <= 10; i++) {
+          const o = Math.round(i * 25.5) * 3;
+          parts.push(`rgb(${lut[o]}, ${lut[o + 1]}, ${lut[o + 2]}) ${i * 10}%`);
+        }
+        return `linear-gradient(90deg, ${parts.join(', ')})`;
+      },
+      /** Legend position (0..1) of a value. */
+      position: (v) => toT(Math.max(0, Math.min(max, v)))
+    };
+  }
+
+  const depth = makeRamp({
+    id: 'depth', label: 'Water depth', unit: 'm', scale: 'sqrt',
+    stops: [[0, '#cde2fb'], [0.3, '#9ec5f4'], [0.75, '#6da7ec'], [1.5, '#3987e5'], [3, '#256abf'], [5, '#184f95'], [8, '#0d366b']],
+    ticks: [0, 0.5, 1, 2, 4, 8]
+  });
+
+  const velocity = makeRamp({
+    id: 'velocity', label: 'Current speed', unit: 'm/s', scale: 'linear',
+    stops: [[0, '#fde5d3'], [0.5, '#fbc39f'], [1, '#f79e67'], [2, '#eb7a3c'], [3.5, '#c85a1f'], [5, '#9b4214'], [7, '#6d2d0c']],
+    ticks: [0, 1, 2, 3, 5, 7]
+  });
+
+  // Arrival time is rebuilt per run because its range follows the event duration.
+  function arrivalRamp(hours) {
+    const H = Math.max(1, hours);
+    return makeRamp({
+      id: 'arrival', label: 'Flood arrival after start', unit: 'h', scale: 'linear',
+      stops: [[0, '#2a1f6b'], [0.2 * H, '#43379a'], [0.4 * H, '#5f55bd'], [0.6 * H, '#8279d6'], [0.8 * H, '#a7a1e6'], [H, '#cfcbf3']],
+      ticks: [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(f * H * 10) / 10)
+    });
+  }
+
+  const hazard = {
+    id: 'hazard',
+    label: 'Hazard to people',
+    classes: [
+      { key: 'low', label: 'Caution', detail: 'Shallow or slow water', color: '#f2d15c', rgb: hexToRgb('#f2d15c') },
+      { key: 'moderate', label: 'Danger for some', detail: 'Children, elderly, disabled', color: '#f29a3d', rgb: hexToRgb('#f29a3d') },
+      { key: 'significant', label: 'Danger for most', detail: 'Most people', color: '#db4b2e', rgb: hexToRgb('#db4b2e') },
+      { key: 'extreme', label: 'Danger for all', detail: 'Including emergency services', color: '#8e1b3a', rgb: hexToRgb('#8e1b3a') }
+    ],
+    /** Simplified Defra/EA FD2320 rating HR = d(v + 0.5) + DF. */
+    classify(d, v) {
+      const rating = d * (v + 0.5) + (d > 0.25 ? 0.5 : 0);
+      return rating < 0.75 ? 0 : rating < 1.25 ? 1 : rating < 2 ? 2 : 3;
+    }
+  };
+
+  const startWater = hexToRgb('#8fa6b6');
+
+  FS.colors = { hexToRgb, makeRamp, depth, velocity, arrivalRamp, hazard, startWater };
+})(self.FloodSim = self.FloodSim || {});
+
+
+/* ---- flood-sim/js/overlays.js ---- */
+/*
+ * overlays.js - everything the simulator draws on the map:
+ * the editable river line, model channel and gauge, flood raster,
+ * moving-water particles, flow arrows, flood edge and affected features.
+ */
+(function (FS) {
+  'use strict';
+
+  const G = FS.geo;
+  const EMPTY = { type: 'FeatureCollection', features: [] };
+
+  function drawIcon(size, draw) {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    draw(ctx, size);
+    return ctx.getImageData(0, 0, size, size);
+  }
+
+  const arrowIcon = () => drawIcon(48, (x, s) => {
+    x.translate(s / 2, s / 2);
+    x.beginPath();
+    x.moveTo(0, -s * 0.42);
+    x.lineTo(s * 0.28, s * 0.02);
+    x.lineTo(s * 0.09, s * 0.02);
+    x.lineTo(s * 0.09, s * 0.4);
+    x.lineTo(-s * 0.09, s * 0.4);
+    x.lineTo(-s * 0.09, s * 0.02);
+    x.lineTo(-s * 0.28, s * 0.02);
+    x.closePath();
+    x.lineJoin = 'round';
+    x.lineWidth = s * 0.08;
+    x.strokeStyle = 'rgba(15, 37, 51, 0.9)';
+    x.stroke();
+    x.fillStyle = '#ffffff';
+    x.fill();
+  });
+
+  const chevronIcon = () => drawIcon(32, (x, s) => {
+    x.translate(s / 2, s / 2);
+    x.beginPath();
+    x.moveTo(-s * 0.22, -s * 0.1);
+    x.lineTo(0, -s * 0.3);
+    x.lineTo(s * 0.22, -s * 0.1);
+    x.lineCap = 'round';
+    x.lineJoin = 'round';
+    x.lineWidth = s * 0.2;
+    x.strokeStyle = 'rgba(15, 37, 51, 0.85)';
+    x.stroke();
+    x.lineWidth = s * 0.1;
+    x.strokeStyle = '#ffffff';
+    x.stroke();
+  });
+
+  /** Moving-water particles advected through the velocity field on a canvas. */
+  class Particles {
+    constructor(grid) {
+      this.grid = grid;
+      this.scale = Math.max(2, Math.min(6, Math.floor(1400 / Math.max(grid.nx, grid.ny))));
+      this.canvas = document.createElement('canvas');
+      this.canvas.width = grid.nx * this.scale;
+      this.canvas.height = grid.ny * this.scale;
+      this.ctx = this.canvas.getContext('2d');
+      this.max = 7000;
+      this.x = new Float32Array(this.max);
+      this.y = new Float32Array(this.max);
+      this.age = new Uint16Array(this.max);
+      this.life = new Uint16Array(this.max);
+      this.count = 0;
+      this.spawn = new Int32Array(0);
+      this.state = null;
+      this.speedFactor = 45; // visual exaggeration of water speed
+    }
+
+    setField(state, cells, K) {
+      if (!this.spawnBuf || this.spawnBuf.length < K) this.spawnBuf = new Int32Array(Math.max(1024, K * 2));
+      let n = 0;
+      for (let m = 0; m < K; m++) {
+        const c = cells[m];
+        if (state.h[c] >= 0.05 && Math.abs(state.u[c]) + Math.abs(state.v[c]) >= 0.05) this.spawnBuf[n++] = c;
+      }
+      this.spawn = this.spawnBuf.subarray(0, n);
+      this.state = state;
+      // Sparse enough that the depth colours stay readable underneath.
+      const want = Math.min(this.max, Math.round(n * 0.4));
+      for (let k = this.count; k < want; k++) this.respawn(k);
+      this.count = want;
+    }
+
+    respawn(k) {
+      const n = this.spawn.length;
+      if (!n) { this.age[k] = 65535; this.life[k] = 0; return; }
+      const c = this.spawn[(Math.random() * n) | 0];
+      const nx = this.grid.nx;
+      this.x[k] = (c % nx) + Math.random();
+      this.y[k] = ((c / nx) | 0) + Math.random();
+      this.age[k] = 0;
+      this.life[k] = 30 + ((Math.random() * 70) | 0);
+    }
+
+    step(dtSec) {
+      const ctx = this.ctx, s = this.scale;
+      const W = this.canvas.width, H = this.canvas.height;
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.14)';
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalCompositeOperation = 'source-over';
+      const st = this.state;
+      if (!st || !this.spawn.length || !this.count) return;
+      const { nx, ny, dx } = this.grid;
+      const k = (Math.min(0.05, dtSec) * this.speedFactor) / dx;
+      const { h, u, v } = st;
+      ctx.beginPath();
+      for (let i = 0; i < this.count; i++) {
+        if (this.age[i] >= this.life[i]) { this.respawn(i); continue; }
+        const px = this.x[i], py = this.y[i];
+        const fx = Math.min(nx - 1.001, Math.max(0, px - 0.5)), fy = Math.min(ny - 1.001, Math.max(0, py - 0.5));
+        const ix = fx | 0, iy = fy | 0, tx = fx - ix, ty = fy - iy;
+        const c = iy * nx + ix;
+        const w00 = (1 - tx) * (1 - ty), w10 = tx * (1 - ty), w01 = (1 - tx) * ty, w11 = tx * ty;
+        const depth = h[c] * w00 + h[c + 1] * w10 + h[c + nx] * w01 + h[c + nx + 1] * w11;
+        if (depth < 0.03) { this.respawn(i); continue; }
+        const uu = u[c] * w00 + u[c + 1] * w10 + u[c + nx] * w01 + u[c + nx + 1] * w11;
+        const vv = v[c] * w00 + v[c + 1] * w10 + v[c + nx] * w01 + v[c + nx + 1] * w11;
+        const qx = px + uu * k, qy = py + vv * k;
+        if (qx < 0 || qy < 0 || qx >= nx || qy >= ny) { this.respawn(i); continue; }
+        ctx.moveTo(px * s, py * s);
+        ctx.lineTo(qx * s, qy * s);
+        this.x[i] = qx;
+        this.y[i] = qy;
+        this.age[i]++;
+      }
+      ctx.lineCap = 'round';
+      ctx.lineWidth = Math.max(1, s * 0.34);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.72)';
+      ctx.stroke();
+    }
+
+    clear() {
+      this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+      this.count = 0;
+      this.state = null;
+    }
+  }
+
+  const MODEL_LAYERS = {
+    flood: ['fs-flood'],
+    particles: ['fs-particles'],
+    arrows: ['fs-arrows'],
+    outline: ['fs-outline'],
+    impacts: ['fs-imp-buildings', 'fs-imp-buildings-line', 'fs-imp-roads', 'fs-imp-facilities', 'fs-imp-facility-labels'],
+    channel: ['fs-channel', 'fs-gauge-section', 'fs-gauge', 'fs-gauge-label']
+  };
+
+  class Overlays {
+    constructor(map) {
+      this.map = map;
+      this.model = null;
+      this.opacity = 0.8;
+      this.visible = { flood: true, particles: true, arrows: false, outline: true, impacts: true, channel: true };
+      this.playing = new Map();
+      this.installBase();
+    }
+
+    installBase() {
+      const m = this.map;
+      if (!m.hasImage('fs-arrow')) m.addImage('fs-arrow', arrowIcon(), { pixelRatio: 2 });
+      if (!m.hasImage('fs-chevron')) m.addImage('fs-chevron', chevronIcon(), { pixelRatio: 2 });
+      m.addSource('fs-river', { type: 'geojson', data: EMPTY });
+      m.addSource('fs-river-vertices', { type: 'geojson', data: EMPTY });
+      m.addSource('fs-river-mids', { type: 'geojson', data: EMPTY });
+      m.addLayer({
+        id: 'fs-river-casing', type: 'line', source: 'fs-river', slot: 'top',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': '#0f2533', 'line-width': 5.5, 'line-opacity': 0.5, 'line-emissive-strength': 1 }
+      });
+      m.addLayer({
+        id: 'fs-river-line', type: 'line', source: 'fs-river', slot: 'top',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': '#8fcaff',
+          'line-width': ['case', ['boolean', ['get', 'selected'], false], 3, 2],
+          'line-opacity': ['case', ['boolean', ['get', 'selected'], false], 1, 0.8],
+          'line-emissive-strength': 1
+        }
+      });
+      m.addLayer({
+        id: 'fs-river-arrows', type: 'symbol', source: 'fs-river', slot: 'top',
+        layout: {
+          'symbol-placement': 'line', 'symbol-spacing': 90, 'icon-image': 'fs-chevron',
+          'icon-allow-overlap': true, 'icon-ignore-placement': true, 'icon-rotate': 90,
+          'icon-rotation-alignment': 'map', 'icon-size': 0.9
+        },
+        paint: { 'icon-emissive-strength': 1 }
+      });
+      m.addLayer({
+        id: 'fs-river-mids', type: 'circle', source: 'fs-river-mids', slot: 'top',
+        paint: {
+          'circle-radius': 4, 'circle-color': '#ffffff', 'circle-opacity': 0.75,
+          'circle-stroke-width': 1.5, 'circle-stroke-color': '#1c5cab', 'circle-emissive-strength': 1,
+          'circle-pitch-alignment': 'map'
+        }
+      });
+      m.addLayer({
+        id: 'fs-river-vertices', type: 'circle', source: 'fs-river-vertices', slot: 'top',
+        paint: {
+          'circle-radius': ['match', ['get', 'role'], 'mid', 5, 'join', 5, 7],
+          'circle-color': ['match', ['get', 'role'], 'start', '#2a78d6', 'end', '#0f2533', '#ffffff'],
+          'circle-stroke-width': 2,
+          'circle-stroke-color': ['match', ['get', 'role'], 'mid', '#1c5cab', 'join', '#0f2533', '#ffffff'],
+          'circle-emissive-strength': 1,
+          'circle-pitch-alignment': 'map'
+        }
+      });
+      m.addLayer({
+        id: 'fs-river-labels', type: 'symbol', source: 'fs-river-vertices', slot: 'top',
+        filter: ['!=', ['get', 'label'], ''],
+        layout: {
+          'text-field': ['get', 'label'], 'text-size': 12, 'text-offset': [0, 1.3], 'text-anchor': 'top',
+          'text-allow-overlap': true, 'text-ignore-placement': true
+        },
+        paint: { 'text-color': '#ffffff', 'text-halo-color': '#0f2533', 'text-halo-width': 1.6, 'text-emissive-strength': 1 }
+      });
+    }
+
+    /** Single-river convenience wrapper around setNetwork. */
+    setRiver(coords, editing) {
+      this.setNetwork([{ coords, name: '' }], 0, editing);
+    }
+
+    /**
+     * Draw every river of the network. reaches: [{ coords, name }], reaches[0] = main river.
+     * Only the selected river shows its editable points while drawing or editing.
+     */
+    setNetwork(reaches, selected, editing) {
+      const m = this.map;
+      const multi = reaches.length > 1;
+      const shortName = (n) => (n || '').replace(/\s+River$/i, '');
+      const lines = [];
+      const vertices = [];
+      const mids = [];
+      reaches.forEach((reach, r) => {
+        const coords = reach.coords || [];
+        const isSel = r === selected;
+        if (coords.length >= 2) {
+          lines.push({ type: 'Feature', properties: { reach: r, selected: isSel }, geometry: { type: 'LineString', coordinates: coords } });
+        }
+        const last = coords.length - 1;
+        const edit = editing && isSel;
+        coords.forEach((c, i) => {
+          const role = i === 0 ? 'start' : i === last ? (r === 0 ? 'end' : 'join') : 'mid';
+          if (!edit && role === 'mid') return;
+          let label = '';
+          if (!edit && coords.length > 1) {
+            if (role === 'start') label = multi && reach.name ? `${shortName(reach.name)} inflow` : 'Inflow';
+            else if (role === 'end') label = 'Outlet';
+          }
+          vertices.push({ type: 'Feature', properties: { index: i, reach: r, role, label, editable: edit }, geometry: { type: 'Point', coordinates: c } });
+        });
+        if (edit) {
+          for (let i = 0; i < last; i++) {
+            mids.push({
+              type: 'Feature', properties: { after: i, reach: r },
+              geometry: { type: 'Point', coordinates: [(coords[i][0] + coords[i + 1][0]) / 2, (coords[i][1] + coords[i + 1][1]) / 2] }
+            });
+          }
+        }
+      });
+      m.getSource('fs-river').setData({ type: 'FeatureCollection', features: lines });
+      m.getSource('fs-river-vertices').setData({ type: 'FeatureCollection', features: vertices });
+      m.getSource('fs-river-mids').setData({ type: 'FeatureCollection', features: mids });
+    }
+
+    setModel(model) {
+      this.clearModel();
+      const m = this.map;
+      const { nx, ny } = model.grid;
+      this.model = model;
+      this.cornerMerc = model.grid.bounds;
+      const corners = FS.channel.gridCorners(model.grid);
+
+      this.floodCanvas = document.createElement('canvas');
+      this.floodCanvas.width = nx;
+      this.floodCanvas.height = ny;
+      this.floodCtx = this.floodCanvas.getContext('2d');
+      this.floodImage = this.floodCtx.createImageData(nx, ny);
+      this.particles = new Particles(model.grid);
+
+      m.addSource('fs-flood', { type: 'canvas', canvas: this.floodCanvas, coordinates: corners, animate: false });
+      m.addLayer({
+        id: 'fs-flood', type: 'raster', source: 'fs-flood', slot: 'middle',
+        paint: { 'raster-opacity': this.opacity, 'raster-fade-duration': 0, 'raster-resampling': 'linear', 'raster-emissive-strength': 1 }
+      });
+      m.addSource('fs-particles', { type: 'canvas', canvas: this.particles.canvas, coordinates: corners, animate: false });
+      m.addLayer({
+        id: 'fs-particles', type: 'raster', source: 'fs-particles', slot: 'middle',
+        paint: { 'raster-opacity': 0.9, 'raster-fade-duration': 0, 'raster-resampling': 'linear', 'raster-emissive-strength': 1 }
+      });
+
+      const toLngLat = (x, y) => G.toLngLat([this.cornerMerc.x0 + x * model.grid.cellMerc, this.cornerMerc.y0 + y * model.grid.cellMerc]);
+      this.gridLngLat = toLngLat;
+      const seg = model.channelOutline;
+      const channelLines = [];
+      for (let k = 0; k < seg.length; k += 4) channelLines.push([toLngLat(seg[k], seg[k + 1]), toLngLat(seg[k + 2], seg[k + 3])]);
+      m.addSource('fs-channel', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'MultiLineString', coordinates: channelLines } } });
+      m.addLayer({
+        id: 'fs-channel', type: 'line', source: 'fs-channel', slot: 'top',
+        paint: { 'line-color': '#bfe3ff', 'line-width': 1.2, 'line-opacity': 0.75, 'line-emissive-strength': 1 }
+      });
+
+      m.addSource('fs-outline', { type: 'geojson', data: EMPTY });
+      m.addLayer({
+        id: 'fs-outline', type: 'line', source: 'fs-outline', slot: 'top',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': '#ffffff', 'line-width': 1.6, 'line-opacity': 0.9, 'line-emissive-strength': 1 }
+      });
+
+      m.addSource('fs-arrows', { type: 'geojson', data: EMPTY });
+      m.addLayer({
+        id: 'fs-arrows', type: 'symbol', source: 'fs-arrows', slot: 'top',
+        layout: {
+          'icon-image': 'fs-arrow', 'icon-rotate': ['get', 'b'], 'icon-rotation-alignment': 'map',
+          'icon-pitch-alignment': 'map', 'icon-allow-overlap': true, 'icon-ignore-placement': true,
+          'icon-size': ['interpolate', ['linear'], ['get', 's'], 0.1, 0.45, 1, 0.7, 4, 1.1]
+        },
+        paint: { 'icon-emissive-strength': 1 }
+      });
+
+      m.addSource('fs-imp-buildings', { type: 'geojson', data: EMPTY });
+      m.addSource('fs-imp-roads', { type: 'geojson', data: EMPTY });
+      m.addSource('fs-imp-facilities', { type: 'geojson', data: EMPTY });
+      m.addLayer({
+        id: 'fs-imp-roads', type: 'line', source: 'fs-imp-roads', slot: 'top',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': ['case', ['get', 'closed'], '#d03b3b', '#fab219'],
+          'line-width': ['case', ['get', 'closed'], 3.5, 2.5], 'line-emissive-strength': 1
+        }
+      });
+      m.addLayer({
+        id: 'fs-imp-buildings', type: 'fill', source: 'fs-imp-buildings', slot: 'top',
+        paint: { 'fill-color': ['case', ['get', 'wet'], '#d03b3b', '#f2d15c'], 'fill-opacity': 0.75, 'fill-emissive-strength': 1 }
+      });
+      m.addLayer({
+        id: 'fs-imp-buildings-line', type: 'line', source: 'fs-imp-buildings', slot: 'top',
+        paint: { 'line-color': '#0f2533', 'line-width': 0.8, 'line-opacity': 0.8, 'line-emissive-strength': 1 }
+      });
+      m.addLayer({
+        id: 'fs-imp-facilities', type: 'circle', source: 'fs-imp-facilities', slot: 'top',
+        paint: {
+          'circle-radius': 6, 'circle-color': ['case', ['get', 'wet'], '#d03b3b', '#f2d15c'],
+          'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff', 'circle-emissive-strength': 1
+        }
+      });
+      m.addLayer({
+        id: 'fs-imp-facility-labels', type: 'symbol', source: 'fs-imp-facilities', slot: 'top',
+        layout: { 'text-field': ['get', 'name'], 'text-size': 11, 'text-offset': [0, 1.1], 'text-anchor': 'top', 'text-max-width': 12 },
+        paint: { 'text-color': '#ffffff', 'text-halo-color': '#0f2533', 'text-halo-width': 1.5, 'text-emissive-strength': 1 }
+      });
+
+      m.addSource('fs-gauge', { type: 'geojson', data: EMPTY });
+      m.addSource('fs-gauge-section', { type: 'geojson', data: EMPTY });
+      m.addLayer({
+        id: 'fs-gauge-section', type: 'line', source: 'fs-gauge-section', slot: 'top',
+        paint: { 'line-color': '#ffffff', 'line-width': 1.5, 'line-opacity': 0.7, 'line-emissive-strength': 1 }
+      });
+      m.addLayer({
+        id: 'fs-gauge', type: 'circle', source: 'fs-gauge', slot: 'top',
+        paint: {
+          'circle-radius': 7, 'circle-color': '#fab219', 'circle-stroke-width': 2.5,
+          'circle-stroke-color': '#0f2533', 'circle-emissive-strength': 1, 'circle-pitch-alignment': 'map'
+        }
+      });
+      m.addLayer({
+        id: 'fs-gauge-label', type: 'symbol', source: 'fs-gauge', slot: 'top',
+        layout: { 'text-field': 'Gauge', 'text-size': 12, 'text-offset': [0, -1.5], 'text-anchor': 'bottom', 'text-allow-overlap': true },
+        paint: { 'text-color': '#ffffff', 'text-halo-color': '#0f2533', 'text-halo-width': 1.6, 'text-emissive-strength': 1 }
+      });
+
+      for (const key of Object.keys(MODEL_LAYERS)) this.setVisible(key, this.visible[key]);
+    }
+
+    clearModel() {
+      const m = this.map;
+      for (const ids of Object.values(MODEL_LAYERS)) for (const id of ids) if (m.getLayer(id)) m.removeLayer(id);
+      for (const id of ['fs-flood', 'fs-particles', 'fs-channel', 'fs-outline', 'fs-arrows', 'fs-imp-buildings', 'fs-imp-roads', 'fs-imp-facilities', 'fs-gauge', 'fs-gauge-section']) {
+        if (m.getSource(id)) m.removeSource(id);
+      }
+      this.playing.clear();
+      this.model = null;
+      this.particles = null;
+    }
+
+    setGauge(gauge) {
+      if (!this.model) return;
+      this.map.getSource('fs-gauge').setData({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: gauge.lngLat } });
+      this.map.getSource('fs-gauge-section').setData({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: gauge.section } });
+    }
+
+    setVisible(key, on) {
+      this.visible[key] = on;
+      for (const id of MODEL_LAYERS[key] || []) {
+        if (this.map.getLayer(id)) this.map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
+      }
+      if (key === 'particles' && !on && this.particles) {
+        this.particles.clear();
+        this.refresh('fs-particles');
+      }
+    }
+
+    setRiverVisible(on) {
+      for (const id of ['fs-river-casing', 'fs-river-line', 'fs-river-arrows', 'fs-river-vertices', 'fs-river-labels', 'fs-river-mids']) {
+        if (this.map.getLayer(id)) this.map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
+      }
+    }
+
+    setOpacity(value) {
+      this.opacity = value;
+      if (this.map.getLayer('fs-flood')) this.map.setPaintProperty('fs-flood', 'raster-opacity', value);
+    }
+
+    /** Ask Mapbox to re-read a canvas source, keeping it live briefly so the terrain drape updates. */
+    refresh(id) {
+      const src = this.map.getSource(id);
+      if (!src || !src.play) return;
+      if (!this.playing.has(id)) src.play();
+      this.playing.set(id, performance.now());
+    }
+
+    tick(now) {
+      for (const [id, since] of this.playing) {
+        if (now - since > 300) {
+          const src = this.map.getSource(id);
+          if (src && src.pause) src.pause();
+          this.playing.delete(id);
+        }
+      }
+    }
+
+    /**
+     * Colour the flood raster.
+     * ctx: { mode, state, cells, K, peak, arrival, tNow, floodDepth, arrivalRamp }
+     */
+    renderFlood(ctx) {
+      if (!this.model) return;
+      const img = this.floodImage.data;
+      img.fill(0);
+      const { mode, state, cells, K, floodDepth } = ctx;
+      const channel = this.model.notLand || this.model.channelMask;
+      const C = FS.colors;
+      const h = state.h, u = state.u, v = state.v;
+
+      if (mode === 'depth' || mode === 'peak') {
+        const field = mode === 'peak' ? ctx.peak : h;
+        const lut = C.depth.lut;
+        for (let m = 0; m < K; m++) {
+          const c = cells[m];
+          const d = field[c];
+          if (d < 0.02) continue;
+          const li = C.depth.index(d) * 3, o = c * 4;
+          img[o] = lut[li]; img[o + 1] = lut[li + 1]; img[o + 2] = lut[li + 2];
+          img[o + 3] = 150 + Math.min(100, d * 35);
+        }
+      } else if (mode === 'velocity') {
+        const lut = C.velocity.lut;
+        for (let m = 0; m < K; m++) {
+          const c = cells[m];
+          if (h[c] < 0.05) continue;
+          const sp = Math.sqrt(u[c] * u[c] + v[c] * v[c]);
+          const li = C.velocity.index(sp) * 3, o = c * 4;
+          img[o] = lut[li]; img[o + 1] = lut[li + 1]; img[o + 2] = lut[li + 2]; img[o + 3] = 230;
+        }
+      } else if (mode === 'hazard') {
+        const classes = C.hazard.classes;
+        for (let m = 0; m < K; m++) {
+          const c = cells[m];
+          const d = h[c];
+          if (channel[c] || d < floodDepth) continue;
+          const cls = classes[C.hazard.classify(d, Math.sqrt(u[c] * u[c] + v[c] * v[c]))];
+          const o = c * 4;
+          img[o] = cls.rgb[0]; img[o + 1] = cls.rgb[1]; img[o + 2] = cls.rgb[2]; img[o + 3] = 235;
+        }
+      } else if (mode === 'arrival') {
+        const ramp = ctx.arrivalRamp, lut = ramp.lut, arrival = ctx.arrival, tNow = ctx.tNow;
+        const start = C.startWater;
+        for (let m = 0; m < K; m++) {
+          const c = cells[m];
+          const a = arrival[c];
+          if (!(a <= tNow)) continue;
+          const o = c * 4;
+          if (a <= 0) {
+            img[o] = start[0]; img[o + 1] = start[1]; img[o + 2] = start[2]; img[o + 3] = 150;
+          } else {
+            const li = ramp.index(a / 3600) * 3;
+            img[o] = lut[li]; img[o + 1] = lut[li + 1]; img[o + 2] = lut[li + 2]; img[o + 3] = 235;
+          }
+        }
+      }
+      this.floodCtx.putImageData(this.floodImage, 0, 0);
+      this.refresh('fs-flood');
+    }
+
+    clearFlood() {
+      if (!this.model) return;
+      this.floodImage.data.fill(0);
+      this.floodCtx.putImageData(this.floodImage, 0, 0);
+      this.refresh('fs-flood');
+      if (this.particles) { this.particles.clear(); this.refresh('fs-particles'); }
+      for (const id of ['fs-outline', 'fs-arrows', 'fs-imp-buildings', 'fs-imp-roads', 'fs-imp-facilities']) {
+        const src = this.map.getSource(id);
+        if (src) src.setData(EMPTY);
+      }
+    }
+
+    updateParticles(state, cells, K) {
+      if (this.particles) this.particles.setField(state, cells, K);
+    }
+
+    animateParticles(dtSec) {
+      if (!this.particles || !this.visible.particles) return;
+      this.particles.step(dtSec);
+      this.refresh('fs-particles');
+    }
+
+    updateOutline(depth, threshold, box) {
+      if (!this.model || !this.visible.outline) return;
+      const { nx, ny } = this.model.grid;
+      const seg = G.contour(depth, nx, ny, threshold, box);
+      const lines = [];
+      for (let k = 0; k < seg.length; k += 4) {
+        lines.push([this.gridLngLat(seg[k], seg[k + 1]), this.gridLngLat(seg[k + 2], seg[k + 3])]);
+      }
+      this.map.getSource('fs-outline').setData({ type: 'Feature', properties: {}, geometry: { type: 'MultiLineString', coordinates: lines } });
+    }
+
+    updateArrows(state) {
+      if (!this.model || !this.visible.arrows) return;
+      const { nx, ny, dx } = this.model.grid;
+      const stride = Math.max(2, Math.round(90 / dx));
+      const features = [];
+      for (let j = stride >> 1; j < ny; j += stride) {
+        for (let i = stride >> 1; i < nx; i += stride) {
+          const c = j * nx + i;
+          if (state.h[c] < 0.1) continue;
+          const u = state.u[c], v = state.v[c];
+          const speed = Math.sqrt(u * u + v * v);
+          if (speed < 0.1) continue;
+          features.push({
+            type: 'Feature',
+            properties: { b: Math.round(G.bearing(u, -v)), s: Math.round(speed * 10) / 10 },
+            geometry: { type: 'Point', coordinates: this.gridLngLat(i + 0.5, j + 0.5) }
+          });
+        }
+      }
+      this.map.getSource('fs-arrows').setData({ type: 'FeatureCollection', features });
+    }
+
+    updateImpacts(collections) {
+      if (!this.model) return;
+      this.map.getSource('fs-imp-buildings').setData(collections.buildings);
+      this.map.getSource('fs-imp-roads').setData(collections.roads);
+      this.map.getSource('fs-imp-facilities').setData(collections.facilities);
+    }
+  }
+
+  FS.overlays = { Overlays, Particles };
+})(self.FloodSim = self.FloodSim || {});
+
+
+/* ---- flood-sim/js/editor.js ---- */
+/*
+ * editor.js - draw and edit the river centreline on the map.
+ *
+ * Draw:  click to add points from upstream to downstream; double-click or
+ *        press Enter to finish; Backspace removes the last point; Esc cancels.
+ * Edit:  drag points; click a small midpoint handle to insert a point;
+ *        right-click a point to delete it.
+ * Gauge: click near the river to move the gauge.
+ */
+(function (FS) {
+  'use strict';
+
+  class RiverEditor {
+    constructor(map, overlays, onEvent) {
+      this.map = map;
+      this.overlays = overlays;
+      this.emit = onEvent;
+      this.coords = [];
+      this.mode = 'view';
+      this.dragIndex = -1;
+      this.cursor = null;
+      this.previous = null;
+      this.pendingRender = false;
+
+      map.on('click', (e) => this.onClick(e));
+      map.on('dblclick', (e) => this.onDoubleClick(e));
+      map.on('mousemove', (e) => this.onMove(e));
+      map.on('mousedown', 'fs-river-vertices', (e) => this.onVertexDown(e));
+      map.on('touchstart', 'fs-river-vertices', (e) => this.onVertexDown(e));
+      map.on('mouseup', () => this.endDrag());
+      map.on('touchend', () => this.endDrag());
+      map.on('touchmove', (e) => this.onMove(e));
+      map.on('contextmenu', (e) => this.onContextMenu(e));
+      map.on('mouseenter', 'fs-river-vertices', () => { if (this.mode === 'edit') this.setCursor('grab'); });
+      map.on('mouseleave', 'fs-river-vertices', () => { if (this.mode === 'edit' && this.dragIndex < 0) this.setCursor(''); });
+      map.on('mouseenter', 'fs-river-mids', () => { if (this.mode === 'edit') this.setCursor('copy'); });
+      map.on('mouseleave', 'fs-river-mids', () => { if (this.mode === 'edit') this.setCursor(''); });
+      window.addEventListener('keydown', (e) => this.onKey(e));
+    }
+
+    setCursor(value) {
+      this.map.getCanvas().style.cursor = value;
+    }
+
+    setCoords(coords, silent) {
+      this.coords = coords.map((c) => [c[0], c[1]]);
+      this.render();
+      if (!silent) this.emit('change', this.coords);
+    }
+
+    render() {
+      let coords = this.coords;
+      if (this.mode === 'draw' && this.cursor && coords.length) coords = coords.concat([this.cursor]);
+      const editing = this.mode === 'edit' || this.mode === 'draw';
+      // With a river network, the app draws every river and substitutes the one being edited.
+      if (this.renderFn) this.renderFn(coords, editing);
+      else this.overlays.setRiver(coords, editing);
+    }
+
+    scheduleRender() {
+      if (this.pendingRender) return;
+      this.pendingRender = true;
+      requestAnimationFrame(() => {
+        this.pendingRender = false;
+        this.render();
+      });
+    }
+
+    setMode(mode) {
+      if (this.mode === mode) mode = 'view';
+      this.mode = mode;
+      this.cursor = null;
+      if (mode === 'draw' || mode === 'gauge') {
+        this.map.doubleClickZoom.disable();
+        this.setCursor('crosshair');
+      } else {
+        this.map.doubleClickZoom.enable();
+        this.setCursor('');
+      }
+      this.render();
+      this.emit('mode', mode);
+    }
+
+    startDraw() {
+      if (this.mode === 'draw') { this.finishDraw(); return; }
+      this.previous = this.coords;
+      this.coords = [];
+      this.setMode('draw');
+    }
+
+    finishDraw() {
+      const cleaned = [];
+      for (const c of this.coords) {
+        const last = cleaned[cleaned.length - 1];
+        if (!last || FS.geo.haversine(last, c) > 3) cleaned.push(c);
+      }
+      if (cleaned.length < 2) {
+        this.coords = this.previous || [];
+        this.setMode('view');
+        this.emit('notice', 'A river needs at least two points. The previous river was kept.');
+        return;
+      }
+      this.coords = cleaned;
+      this.previous = null;
+      this.setMode('view');
+      this.emit('change', this.coords);
+    }
+
+    cancel() {
+      if (this.mode === 'draw') this.coords = this.previous || this.coords;
+      this.previous = null;
+      this.endDrag();
+      this.setMode('view');
+    }
+
+    reverse() {
+      if (this.coords.length < 2) return;
+      this.coords.reverse();
+      this.render();
+      this.emit('change', this.coords);
+    }
+
+    onClick(e) {
+      if (this.mode === 'draw') {
+        this.coords.push([e.lngLat.lng, e.lngLat.lat]);
+        this.render();
+      } else if (this.mode === 'gauge') {
+        this.emit('gauge', [e.lngLat.lng, e.lngLat.lat]);
+        this.setMode('view');
+      } else if (this.mode === 'edit') {
+        const hit = this.hit(e.point, 'fs-river-mids');
+        if (hit) {
+          const after = hit.properties.after;
+          this.coords.splice(after + 1, 0, [e.lngLat.lng, e.lngLat.lat]);
+          this.render();
+          this.emit('change', this.coords);
+        }
+      }
+    }
+
+    onDoubleClick(e) {
+      if (this.mode !== 'draw') return;
+      e.preventDefault();
+      this.finishDraw();
+    }
+
+    onMove(e) {
+      if (this.dragIndex >= 0) {
+        this.coords[this.dragIndex] = [e.lngLat.lng, e.lngLat.lat];
+        this.scheduleRender();
+      } else if (this.mode === 'draw') {
+        this.cursor = [e.lngLat.lng, e.lngLat.lat];
+        this.scheduleRender();
+      }
+    }
+
+    onVertexDown(e) {
+      if (this.mode !== 'edit' || !e.features || !e.features.length) return;
+      const feature = e.features.find((f) => f.properties.editable);
+      if (!feature) return;
+      e.preventDefault();
+      this.dragIndex = feature.properties.index;
+      this.map.dragPan.disable();
+      this.setCursor('grabbing');
+    }
+
+    endDrag() {
+      if (this.dragIndex < 0) return;
+      this.dragIndex = -1;
+      this.map.dragPan.enable();
+      this.setCursor(this.mode === 'edit' ? 'grab' : '');
+      this.emit('change', this.coords);
+    }
+
+    onContextMenu(e) {
+      if (this.mode !== 'edit') return;
+      const hit = this.hit(e.point, 'fs-river-vertices');
+      if (!hit) return;
+      e.preventDefault();
+      if (this.coords.length <= 2) {
+        this.emit('notice', 'A river needs at least two points.');
+        return;
+      }
+      this.coords.splice(hit.properties.index, 1);
+      this.render();
+      this.emit('change', this.coords);
+    }
+
+    onKey(e) {
+      const target = e.target;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) return;
+      if (this.mode === 'draw') {
+        if (e.key === 'Enter') { e.preventDefault(); this.finishDraw(); }
+        else if (e.key === 'Backspace') { e.preventDefault(); this.coords.pop(); this.render(); }
+      }
+      if (e.key === 'Escape' && this.mode !== 'view') this.cancel();
+    }
+
+    hit(point, layer) {
+      if (!this.map.getLayer(layer)) return null;
+      const box = [[point.x - 7, point.y - 7], [point.x + 7, point.y + 7]];
+      const found = this.map.queryRenderedFeatures(box, { layers: [layer] })
+        .filter((f) => layer !== 'fs-river-vertices' || f.properties.editable);
+      return found.length ? found[0] : null;
+    }
+  }
+
+  FS.editor = { RiverEditor };
+})(self.FloodSim = self.FloodSim || {});
+
+
+/* ---- flood-overflow/quick.js ---- */
+/*
+ * quick.js - "Flood overflow": every value auto-filled, no setup panel.
+ *
+ * Reuses the same terrain-to-hydraulics pipeline as flood-sim.html (geo,
+ * terrain, channel, engine, simulation, colors, overlays) but skips the
+ * editor/UI/impacts layers entirely. Two rivers (a main river and a
+ * tributary that joins it) are each deliberately narrow and shallow
+ * relative to the flood they are given, so both overflow their banks,
+ * meet at the confluence, and spread across the valley as one flood.
+ *
+ * The camera is locked top-down and framed on the whole modelled area.
+ * The only interaction is Play/Pause (button, or the Space key) -
+ * everything else runs automatically as soon as the page loads.
+ */
+(function (FS) {
+  'use strict';
+
+  const CFG = FS.config;
+  const $ = (id) => document.getElementById(id);
+  const fmt = {
+    int: (v) => Math.round(v).toLocaleString('en-US'),
+    clock: (sec) => {
+      const s = Math.max(0, Math.round(sec));
+      return Math.floor(s / 3600) + ':' + String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+    },
+    area: (m2) => (m2 >= 1e4 ? (m2 / 1e4).toFixed(1) + ' ha' : Math.round(m2) + ' m²')
+  };
+  const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()));
+
+  // ---- Auto-filled scenario: two channels too small for the floods they are given.
+  const MAIN = { name: CFG.defaultRiver.name, coords: CFG.defaultRiver.coordinates, width: 55, depth: 3, nChannel: 0.045 };
+  const TRIB = { name: CFG.defaultNetwork[0].name, coords: CFG.defaultNetwork[0].coordinates, width: 35, depth: 2.5, nChannel: 0.05 };
+  // snap:false - the traced coordinates are already accurate; letting the model nudge them
+  // onto the DEM's "lowest point" is what was pushing the carved channel off the real river
+  // in this steep gorge, where the terrain DEM isn't fine enough to resolve the true thalweg.
+  const SHARED = { nFloodplain: 0.07, padding: 700, cellSize: 0, snap: false };
+  const PEAK_MULT = 14;     // peak inflow as a multiple of each channel's own bankfull capacity
+  const BASE_MULT = 0.25;   // starting flow as a fraction of bankfull
+  const TIME_TO_PEAK_H = 2.5;
+  const DURATION_H = 7;
+  const SPINUP_S = 20 * 60;
+  const PLAYBACK_SPEED = 600; // simulated seconds per real second (~42 s to play the whole event)
+  // "Counts as flooded from" this depth - drives the flooded-area stat, the flood-edge
+  // outline and the hazard rating. Keep this small (this is a threshold, not a dial for
+  // "more flood" - raising it HIDES flooding from the stats/outline instead of showing
+  // more). Use PEAK_MULT above to make the flood itself bigger.
+  const FLOOD_DEPTH = 0.1;
+
+  const app = {
+    map: null,
+    overlays: null,
+    built: null,
+    run: null,
+    sim: null,
+    playback: null,
+    state: null,
+    peak: null,
+    series: null,
+    box: null,
+    needsRender: false,
+    lastNow: 0,
+    timers: { readout: 0, outline: 0, impacts: 0 }
+  };
+
+  function toast(text, kind, ms) {
+    const t = $('toast');
+    t.textContent = text;
+    t.dataset.kind = kind || 'info';
+    t.hidden = false;
+    clearTimeout(app.toastTimer);
+    if (ms !== 0) app.toastTimer = setTimeout(() => { t.hidden = true; }, ms || 4000);
+  }
+
+  function setStatus(text, kind) {
+    const el = $('status-line');
+    el.textContent = text;
+    el.dataset.kind = kind || '';
+  }
+
+  // ------------------------------------------------------------------ map
+  function initMap() {
+    mapboxgl.accessToken = CFG.MAPBOX_TOKEN;
+    const map = new mapboxgl.Map({
+      container: 'map',
+      style: CFG.map.style,
+      projection: CFG.map.projection,
+      center: CFG.map.center,
+      zoom: CFG.map.zoom,
+      pitch: 0,
+      bearing: 0,
+      minPitch: 0,
+      maxPitch: 0 // locked top-down: pitch can never move away from 0
+    });
+    app.map = map;
+    map.dragRotate.disable();
+    map.touchZoomRotate.disableRotation();
+    app.map = map;
+    map.on('style.load', () => {
+      if (!map.getSource('mapbox-dem')) {
+        map.setFog({});
+        map.addSource('mapbox-dem', { type: 'raster-dem', url: 'mapbox://mapbox.mapbox-terrain-dem-v1', tileSize: 512, maxzoom: 14 });
+        map.setTerrain({ source: 'mapbox-dem', exaggeration: CFG.map.terrainExaggeration });
+      }
+      if (!app.ready) { app.ready = true; onStyleReady(); }
+    });
+    map.on('error', (e) => console.warn('Map error:', e && e.error ? e.error.message : e));
+  }
+
+  async function onStyleReady() {
+    app.overlays = new FS.overlays.Overlays(app.map);
+    $('btn-play').addEventListener('click', togglePlay);
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' && !$('btn-play').disabled) { e.preventDefault(); togglePlay(); }
+      if ((e.key === 'e' || e.key === 'E') && !e.ctrlKey && !e.metaKey && !e.altKey) { toggleEditUI(); }
+    });
+    initEditor();
+    if (location.protocol === 'file:') {
+      toast('Opened as a file: Mapbox cannot load full map detail this way. Serve the folder with a local web server for the best view.', 'info', 9000);
+    }
+    requestAnimationFrame(loop);
+    try {
+      await buildAndPrepare();
+    } catch (err) {
+      console.error(err);
+      setStatus('Could not set up the demo. ' + err.message, 'error');
+      toast('Setup failed: ' + err.message, 'error', 8000);
+    }
+  }
+
+  // ---------------------------------------------------------- auto build
+  async function buildAndPrepare() {
+    setStatus('Planning the model grid…');
+    const grid = FS.channel.planGrid([MAIN.coords, TRIB.coords], Object.assign({}, SHARED, {
+      width: MAIN.width, minWidth: Math.min(MAIN.width, TRIB.width), maxCells: 220000
+    }));
+
+    setStatus('Loading elevation tiles…');
+    const dem = await FS.terrain.load(grid.bounds, {
+      zoom: grid.demZoom, retina: grid.demRetina, token: CFG.MAPBOX_TOKEN,
+      onProgress: (d, n) => setStatus('Loading elevation tiles, ' + d + ' of ' + n + '…')
+    });
+    setStatus('Sampling the terrain…');
+    await nextFrame();
+    const sampled = FS.terrain.sampleGrid(dem, grid);
+
+    setStatus('Carving the river channels and their confluence…');
+    await nextFrame();
+    const reaches = [
+      { coords: MAIN.coords, name: MAIN.name, width: MAIN.width, depth: MAIN.depth, nChannel: MAIN.nChannel },
+      { coords: TRIB.coords, name: TRIB.name, width: TRIB.width, depth: TRIB.depth, nChannel: TRIB.nChannel }
+    ];
+    const model = FS.channel.buildModel(grid, sampled.z, reaches, Object.assign({}, SHARED, { inletLength: 150 }));
+
+    app.built = { model, grid, impacts: null };
+    app.overlays.setModel(model);
+    app.overlays.setVisible('particles', true);
+    app.overlays.setVisible('outline', true);
+    app.overlays.setVisible('arrows', false);
+    app.overlays.setVisible('impacts', true);
+    app.overlays.setVisible('channel', true);
+    app.overlays.setOpacity(0.85);
+    renderLegend();
+    loadImpacts(grid, model); // buildings + roads, fetched in the background
+
+    const hydros = model.reaches.map((r) => FS.hydrograph.build({
+      type: 'wave',
+      base: BASE_MULT * r.bankfullQ,
+      peak: PEAK_MULT * r.bankfullQ,
+      timeToPeak: TIME_TO_PEAK_H,
+      shape: 5,
+      duration: DURATION_H
+    }));
+    const duration = Math.max.apply(null, hydros.map((hy) => hy.duration));
+    const tables = hydros.map((hy) => FS.hydrograph.sample(hy, 60, duration));
+    const init = FS.channel.initialDepths(model, hydros.map((hy) => hy.q(0)));
+    const nx = grid.nx, ny = grid.ny, dx = grid.dx;
+
+    const config = {
+      nx: nx, ny: ny, dx: dx,
+      z: model.z,
+      manning: model.manning,
+      channelMask: model.notLand,
+      h0: init.h0,
+      sources: model.reaches.map((r, i) => ({ cells: r.inletCells, hydrograph: tables[i] })),
+      outletCells: model.outletCells,
+      duration: duration,
+      spinup: SPINUP_S,
+      frameInterval: FS.simulation.frameIntervalFor(duration, 240),
+      params: {
+        alpha: 0.7, froudeMax: 1, theta: 0.8, floodDepth: FLOOD_DEPTH,
+        outletSlope: model.outletSlope, outletFactor: model.outletFactor
+      }
+    };
+    const N = nx * ny;
+    app.run = { duration: duration, floodDepth: FLOOD_DEPTH };
+    app.state = new FS.simulation.FloodState(N);
+    app.peak = new FS.simulation.PeakEnvelope(N);
+    app.series = { t: [], area: [] };
+    app.box = null;
+    app.playback = new FS.simulation.Playback(PLAYBACK_SPEED);
+    app.sim = new FS.simulation.Simulation(config, { memoryBytes: 220 * 1048576 }, {
+      onFrame: onFrame, onProgress: onProgress, onDone: onDone, onError: onError
+    });
+
+    $('clock-total').textContent = 'of ' + fmt.clock(duration) + ' h';
+    $('stat-ratio').textContent = PEAK_MULT + '× bankfull';
+    $('info-line').textContent =
+      MAIN.name + ' and ' + TRIB.name + ' are each carved too small for the flood they are given (' +
+      PEAK_MULT + '× their own bankfull capacity), so both overflow, meet at the confluence, and merge into one flooded valley.';
+
+    fitToConfluence();
+    setStatus('Computing ahead… (bankfull: ' + fmt.int(model.reaches[0].bankfullQ) + ' + ' + fmt.int(model.reaches[1].bankfullQ) + ' m³/s)');
+    $('btn-play').disabled = false;
+  }
+
+  /** Buildings and roads from Mapbox Streets, fetched after the model exists so it never
+   *  delays the terrain/hydraulics pipeline or the first Play. */
+  async function loadImpacts(grid, model) {
+    try {
+      const infra = await FS.mapdata.loadInfrastructure(grid.bounds, { token: CFG.MAPBOX_TOKEN });
+      if (!app.built || app.built.model !== model) return; // superseded by a later build
+      const mapped = FS.channel.mapInfrastructure(model, infra);
+      mapped.roads = [];      // houses only - no road lines in this view
+      mapped.facilities = [];
+      app.built.impacts = new FS.impacts.Impacts(mapped, CFG.impacts);
+      app.needsRender = true;
+    } catch (err) {
+      console.warn('Buildings and roads could not be loaded:', err.message);
+    }
+  }
+
+  /**
+   * Close top-down camera on the confluence itself, not the whole 5+3 km river
+   * network - a tight, walkable-scale view where individual houses read clearly.
+   * The modelled grid still extends well beyond this frame so the flood has room
+   * to spread; that extra area is simply outside the initial view.
+   */
+  function fitToConfluence() {
+    const center = TRIB.coords[TRIB.coords.length - 1]; // where the tributary meets the main river
+    const latRad = center[1] * Math.PI / 180;
+    const halfWidthM = 250, halfHeightM = 100; // a ~0.9 x 0.6 km close-up
+    const dLat = halfHeightM / 111320;
+    const dLng = halfWidthM / (111320 * Math.cos(latRad));
+    app.map.fitBounds(
+      [[center[0] - dLng, center[1] - dLat], [center[0] + dLng, center[1] + dLat]],
+      { padding: 20, duration: 1200 }
+    );
+  }
+
+  // ------------------------------------------------------------- path editor
+  // Lets you drag the river/tributary points to match the real channel, then
+  // copy the corrected coordinates back into flood-sim/js/config.js by hand.
+  // Press E to show/hide the edit panel and the draggable points.
+  const net = { reaches: [MAIN, TRIB], selected: 0 };
+  let editUIOn = false;
+
+  function renderNetwork(editCoords, editing) {
+    const list = net.reaches.map((r, i) => ({ name: r.name, coords: i === net.selected ? editCoords : r.coords }));
+    app.overlays.setNetwork(list, net.selected, editing);
+  }
+
+  function onEditorEvent(type, payload) {
+    if (type === 'change') net.reaches[net.selected].coords = payload.map((c) => [c[0], c[1]]);
+  }
+
+  function updateReachTabs() {
+    for (let i = 0; i < net.reaches.length; i++) {
+      $('edit-tab-' + i).classList.toggle('active', i === net.selected);
+    }
+  }
+
+  function selectReach(i) {
+    if (i === net.selected || !net.reaches[i]) return;
+    net.selected = i;
+    app.editor.setCoords(net.reaches[i].coords, true);
+    updateReachTabs();
+  }
+
+  const WATER_LAYERS = ['flood', 'particles', 'outline', 'channel'];
+  function setWaterHidden(hide) {
+    for (const key of WATER_LAYERS) app.overlays.setVisible(key, !hide);
+  }
+
+  function setEditUI(on) {
+    editUIOn = on;
+    $('edit-panel').hidden = !on;
+    app.overlays.setRiverVisible(on);
+    if (on) {
+      app.editor.setCoords(net.reaches[net.selected].coords, true);
+      app.editor.setMode('edit');
+    } else {
+      app.editor.cancel();
+      if ($('edit-hide-water').checked) {
+        $('edit-hide-water').checked = false;
+        setWaterHidden(false);
+      }
+    }
+    updateReachTabs();
+  }
+
+  function toggleEditUI() { setEditUI(!editUIOn); }
+
+  function copyCoordsJson() {
+    const round = (c) => [Math.round(c[0] * 1e5) / 1e5, Math.round(c[1] * 1e5) / 1e5];
+    const data = {
+      defaultRiver: { name: MAIN.name, coordinates: MAIN.coords.map(round) },
+      defaultNetwork: [{ name: TRIB.name, coordinates: TRIB.coords.map(round) }]
+    };
+    const text = JSON.stringify(data, null, 2);
+    console.log('Edited river coordinates — paste into flood-sim/js/config.js:\n' + text);
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text)
+        .then(() => toast('Coordinates copied — paste into config.js', 'info', 5000))
+        .catch(() => toast('Could not copy — printed to the console instead', 'info', 5000));
+    } else {
+      toast('Printed the coordinates JSON to the console (F12)', 'info', 5000);
+    }
+  }
+
+  async function autoDetectFromMap() {
+    const map = app.map;
+    if (map.getZoom() < 11) {
+      toast('Zoom in closer to the river first, then try again.', 'info', 4000);
+      return;
+    }
+    const btn = $('edit-detect-btn');
+    btn.disabled = true;
+    btn.textContent = 'Searching…';
+    try {
+      const b = map.getBounds();
+      const diag = FS.geo.haversine([b.getWest(), b.getSouth()], [b.getEast(), b.getNorth()]);
+      const center = map.getCenter();
+      const river = await FS.mapdata.detectRiver([center.lng, center.lat], {
+        token: CFG.MAPBOX_TOKEN,
+        searchRadius: Math.min(Math.max(diag * 0.6, 2000), 6000),
+        reachLength: Math.min(Math.max(diag * 0.7, 1500), 6000),
+        tributaryLength: Math.min(Math.max(diag * 0.4, 1000), 3500)
+      });
+      if (!river) {
+        toast('No river found near the map centre. Pan/zoom to it and try again.', 'info', 5000);
+        return;
+      }
+      MAIN.coords = river.coordinates;
+      if (river.name) MAIN.name = river.name;
+      const trib = river.tributaries && river.tributaries[0];
+      if (trib) {
+        TRIB.coords = trib.coordinates;
+        if (trib.name) TRIB.name = trib.name;
+      }
+      app.editor.setCoords(net.reaches[net.selected].coords, true);
+      toast('Detected ' + (river.name || 'a river') + ' from map data (' + fmt.int(river.length) + ' m)' +
+        (trib ? ', plus a tributary' : '') + '. Fine-tune if needed, then copy JSON.', 'info', 7000);
+    } catch (err) {
+      toast('Detection failed: ' + err.message, 'error', 6000);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Auto-detect from map (OSM waterway data)';
+    }
+  }
+
+  function initEditor() {
+    app.editor = new FS.editor.RiverEditor(app.map, app.overlays, onEditorEvent);
+    app.editor.renderFn = renderNetwork;
+    $('edit-tab-0').addEventListener('click', () => selectReach(0));
+    $('edit-tab-1').addEventListener('click', () => selectReach(1));
+    $('edit-copy-btn').addEventListener('click', copyCoordsJson);
+    $('edit-detect-btn').addEventListener('click', autoDetectFromMap);
+    $('edit-hide-water').addEventListener('change', (e) => setWaterHidden(e.target.checked));
+    updateReachTabs();
+  }
+
+  function renderLegend() {
+    const ramp = FS.colors.depth;
+    $('legend-bar').style.background = ramp.gradient();
+    const ticks = $('legend-ticks');
+    ticks.replaceChildren();
+    for (let i = 0; i < ramp.ticks.length; i++) {
+      const v = ramp.ticks[i];
+      const s = document.createElement('span');
+      s.textContent = String(v);
+      s.style.left = (ramp.position(v) * 100).toFixed(1) + '%';
+      ticks.appendChild(s);
+    }
+    $('legend-card').hidden = false;
+  }
+
+  // ------------------------------------------------------------ sim events
+  function onFrame(sim, frame) {
+    if (sim !== app.sim) return;
+    const s = frame.stats;
+    if (s.t >= 0) {
+      app.series.t.push(s.t);
+      app.series.area.push(s.floodArea);
+    }
+    const nx = app.built.grid.nx;
+    const box = app.box || { i0: Infinity, i1: -Infinity, j0: Infinity, j1: -Infinity };
+    for (let k = 0; k < frame.newTracked.length; k++) {
+      const c = frame.newTracked[k];
+      const j = (c / nx) | 0, i = c - j * nx;
+      if (i < box.i0) box.i0 = i;
+      if (i > box.i1) box.i1 = i;
+      if (j < box.j0) box.j0 = j;
+      if (j > box.j1) box.j1 = j;
+    }
+    app.box = box;
+    if (sim.store.length === 1) app.needsRender = true;
+  }
+
+  function onProgress(sim) {
+    if (sim !== app.sim || app.playback.playing) return;
+    setStatus('Computed ahead to ' + fmt.clock(sim.computeT) + ' h — press Play');
+  }
+
+  function onDone(sim) {
+    if (sim !== app.sim) return;
+    if (!app.playback.playing) setStatus('Ready — press Play');
+  }
+
+  function onError(sim, message) {
+    if (sim !== app.sim) return;
+    toast('The simulation stopped. ' + message, 'error', 8000);
+    setStatus('Stopped with an error', 'error');
+  }
+
+  // -------------------------------------------------------------- playback
+  function togglePlay() {
+    const p = app.playback;
+    if (!p) return;
+    if (p.playing) {
+      p.pause();
+    } else {
+      if (p.t >= app.run.duration - 1) p.seek(0);
+      p.play();
+    }
+    $('btn-play').classList.toggle('playing', p.playing);
+    $('btn-play').setAttribute('aria-label', p.playing ? 'Pause' : 'Play');
+    $('play-hint').hidden = p.playing;
+    app.needsRender = true;
+  }
+
+  function loop(now) {
+    requestAnimationFrame(loop);
+    const dtReal = app.lastNow ? Math.min(0.1, (now - app.lastNow) / 1000) : 0;
+    app.lastNow = now;
+    const sim = app.sim, p = app.playback;
+    if (sim && p && app.run) {
+      const wasPlaying = p.playing;
+      const changed = p.advance(now, sim.store.length ? sim.store.lastT : -Infinity, app.run.duration);
+      if (wasPlaying && !p.playing) {
+        $('btn-play').classList.remove('playing');
+        $('play-hint').hidden = false;
+        setStatus(p.t >= app.run.duration - 1 ? 'Flood finished — press Play to watch again' : 'Paused — press Play to continue');
+      }
+      if (changed || app.needsRender) {
+        app.needsRender = false;
+        renderState(now);
+      }
+    }
+    if (app.overlays && app.state && app.state.stats) app.overlays.animateParticles(dtReal);
+    if (app.overlays) app.overlays.tick(now);
+  }
+
+  function renderState(now) {
+    const sim = app.sim;
+    const t = app.playback.t;
+    if (!app.state.fill(sim.store, t)) return;
+    app.peak.update(sim.store, app.state);
+    const cells = sim.store.cells, K = app.state.K;
+    app.overlays.renderFlood({
+      mode: 'depth', state: app.state, cells: cells, K: K, peak: app.peak.h, arrival: sim.store.arrival,
+      tNow: app.state.t, floodDepth: app.run.floodDepth
+    });
+    app.overlays.updateParticles(app.state, cells, K);
+    $('clock-now').textContent = fmt.clock(app.state.t);
+
+    if (now - app.timers.readout > 120) {
+      app.timers.readout = now;
+      $('stat-area').textContent = fmt.area(app.state.stats.floodArea);
+      if (app.playback.playing) {
+        setStatus(app.playback.buffering ? 'Playback is waiting for the model to catch up…' : 'Playing…');
+      }
+    }
+    if (now - app.timers.outline > 250) {
+      app.timers.outline = now;
+      const box = app.box ? { i0: app.box.i0 - 2, i1: app.box.i1 + 2, j0: app.box.j0 - 2, j1: app.box.j1 + 2 } : null;
+      app.overlays.updateOutline(app.state.h, app.run.floodDepth, box);
+    }
+    const impacts = app.built.impacts;
+    if (impacts && now - app.timers.impacts > 400) {
+      app.timers.impacts = now;
+      app.overlays.updateImpacts(impacts.features(app.state.h, app.peak.h));
+    }
+  }
+
+  if (typeof mapboxgl === 'undefined') {
+    document.body.insertAdjacentHTML('beforeend', '<p class="toast" data-kind="error">Mapbox GL JS did not load. Check your internet connection and reload.</p>');
+  } else {
+    initMap();
+  }
+})(self.FloodSim = self.FloodSim || {});
+
+
+</script>
+</body>
+
+</html>
