@@ -122,6 +122,15 @@ export default function AlertButton({ event }: AlertButtonProps) {
           Endpoint not configured — alert marked active locally only
         </p>
       )}
+
+      <a
+        href="/flood-overflow.html"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-1.5 block rounded border border-zinc-300 bg-white px-2 py-1 text-center text-[9px] font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50"
+      >
+        View flood overflow report
+      </a>
     </div>
   );
 }
