@@ -353,24 +353,23 @@ function makeLabel(title: string, meta: string, color: string) {
 
   const pill = document.createElement("div");
   pill.className =
-    "flex items-center gap-1.5 whitespace-nowrap rounded-full border border-white/15 bg-slate-950/70 px-2.5 py-1 text-[10px] font-medium tracking-wide text-white/90 shadow-lg shadow-black/40 backdrop-blur-md";
+    "flex items-center gap-1.5 whitespace-nowrap rounded border border-slate-700 bg-[#0b1220]/90 px-2 py-1 text-[11px] font-medium text-slate-200 shadow-md shadow-black/30";
 
   const dot = document.createElement("span");
-  dot.className = "h-1.5 w-1.5 rounded-full";
+  dot.className = "h-1.5 w-1.5 rounded-[1px]";
   dot.style.background = color;
-  dot.style.boxShadow = `0 0 8px ${color}`;
 
   const name = document.createElement("span");
   name.textContent = title;
 
   const detail = document.createElement("span");
-  detail.className = "text-white/45";
+  detail.className = "text-slate-400";
   detail.textContent = meta;
 
   pill.append(dot, name, detail);
 
   const stem = document.createElement("div");
-  stem.className = "h-7 w-px bg-linear-to-b from-white/10 to-white/60";
+  stem.className = "h-6 w-px bg-slate-400/50";
 
   root.append(pill, stem);
   return root;
@@ -458,7 +457,7 @@ const TERRAIN_FRAG = /* glsl */ `
     vec3 contourCol = mix(vec3(0.10, 0.33, 0.95), vec3(0.55, 0.88, 1.0), smoothstep(1.5, 7.5, h));
     float minor = isoLine(h, 0.35, 1.0);
     float major = isoLine(h, 1.75, 1.4);
-    col += contourCol * (minor * 0.14 + major * 0.5) * (0.35 + 0.65 * fadeFar);
+    col += contourCol * (minor * 0.12 + major * 0.4) * (0.35 + 0.65 * fadeFar);
 
     vec2 gv = vWorld.xz / 2.5;
     vec2 gd = abs(fract(gv - 0.5) - 0.5) / max(fwidth(gv), vec2(1e-4));
@@ -473,7 +472,7 @@ const TERRAIN_FRAG = /* glsl */ `
       vec3 zc = zone.w < 0.5 ? vec3(0.26, 0.52, 0.96) : (zone.w < 1.5 ? vec3(0.98, 0.72, 0.02) : vec3(0.92, 0.26, 0.21));
       float pulse = 0.65 + 0.35 * sin(uTime * 2.4 + float(i) * 1.7);
       float rings = pow(0.5 + 0.5 * sin((d - uTime * 0.5) * 12.0), 10.0);
-      col += zc * k * (k * 0.28 * pulse + rings * 0.35);
+      col += zc * k * (k * 0.22 * pulse + rings * 0.28);
     }
 
     float passed = vDm - uSurge;
@@ -483,13 +482,13 @@ const TERRAIN_FRAG = /* glsl */ `
     float flow = 0.5 + 0.5 * sin(vDm * 3.2 + uTime * 4.5 + vBank * 7.0);
     vec3 waterCol = mix(vec3(0.04, 0.30, 0.95), vec3(0.18, 0.80, 1.0), flow * 0.55);
     waterCol = mix(waterCol, vec3(0.85, 0.96, 1.0), smoothstep(0.45, 1.0, surge) * 0.6);
-    col = mix(col, waterCol * (0.6 + surge * 1.7), water * 0.92);
-    col += vec3(0.08, 0.45, 1.0) * exp(-max(edge, 0.0) * 5.0) * (0.10 + surge * 0.45);
+    col = mix(col, waterCol * (0.5 + surge * 1.1), water * 0.92);
+    col += vec3(0.08, 0.45, 1.0) * exp(-max(edge, 0.0) * 5.0) * (0.08 + surge * 0.28);
 
     float dHub = distance(vWorld.xz, uHub.xz);
     float ring = exp(-pow((dHub - uScan) / 0.4, 2.0)) * uScanStrength;
-    col += vec3(0.22, 0.55, 1.0) * ring * 0.55;
-    col += contourCol * (minor + major) * ring * 0.9;
+    col += vec3(0.22, 0.55, 1.0) * ring * 0.4;
+    col += contourCol * (minor + major) * ring * 0.6;
 
     float inside = 1.0 - smoothstep(uReveal - 1.5, uReveal, dHub);
     float front = exp(-pow((dHub - uReveal) / 0.35, 2.0)) * step(uReveal, 60.0);
@@ -1140,7 +1139,7 @@ export default function LoginScene({ diving, onReady, avoid, className }: LoginS
     composer.setPixelRatio(pixelRatio);
     composer.setSize(w, h);
     composer.addPass(new RenderPass(scene, camera));
-    const bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.8, 0.55, 0.2);
+    const bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.55, 0.5, 0.28);
     composer.addPass(bloom);
     const outputPass = new OutputPass();
     composer.addPass(outputPass);
@@ -1309,7 +1308,7 @@ export default function LoginScene({ diving, onReady, avoid, className }: LoginS
       core.rotation.x += dt * 0.4 * spin;
       core.rotation.y += dt * 0.6 * spin;
 
-      bloom.strength = 0.8 + diveK * diveK * 1.3;
+      bloom.strength = 0.55 + diveK * diveK * 1.1;
 
       if (frame++ % 20 === 0) refreshObstacles();
       camera.updateMatrixWorld();
