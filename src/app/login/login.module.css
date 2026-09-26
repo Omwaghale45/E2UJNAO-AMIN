@@ -1,0 +1,186 @@
+@property --ndrf-beam-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+/* backwards, not both: a lingering filter would make this a backdrop root and break the card's glass blur */
+.fadeUp {
+  animation: fade-up 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: blur(0);
+  }
+}
+
+.overlayIn {
+  animation: overlay-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+    filter: blur(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: blur(0);
+  }
+}
+
+.card {
+  transform: perspective(1400px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: transform;
+}
+
+.beam {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(
+    from var(--ndrf-beam-angle),
+    transparent 0deg 250deg,
+    rgb(66 133 244 / 0.9) 300deg,
+    rgb(52 168 83 / 0.9) 335deg,
+    transparent 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: beam-spin 6s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes beam-spin {
+  to {
+    --ndrf-beam-angle: 360deg;
+  }
+}
+
+.glare {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    520px circle at var(--gx, 50%) var(--gy, 0%),
+    rgb(255 255 255 / 0.09),
+    transparent 45%
+  );
+  opacity: var(--glare, 0);
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+
+.shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    110deg,
+    transparent 30%,
+    rgb(255 255 255 / 0.3) 50%,
+    transparent 70%
+  );
+  transform: translateX(-100%);
+  pointer-events: none;
+}
+
+.shimmer:hover::after {
+  transform: translateX(100%);
+  transition: transform 0.8s ease;
+}
+
+.gradientText {
+  background: linear-gradient(90deg, #7dd3fc, #60a5fa 35%, #34d399 70%, #7dd3fc);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: gradient-pan 8s linear infinite;
+}
+
+@keyframes gradient-pan {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.tickerMask {
+  mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+}
+
+.tickerMask:hover > * {
+  animation-play-state: paused !important;
+}
+
+.progress {
+  transform-origin: left center;
+  animation: progress-fill 1.7s cubic-bezier(0.45, 0, 0.25, 1) both;
+}
+
+@keyframes progress-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.input:-webkit-autofill,
+.input:-webkit-autofill:hover,
+.input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #fff;
+  caret-color: #fff;
+  -webkit-box-shadow: 0 0 0 1000px rgb(15 23 42) inset;
+  transition: background-color 9999s ease-out 0s;
+}
+
+.contours {
+  background-image:
+    repeating-radial-gradient(circle at 28% 38%, rgb(96 165 250 / 0.07) 0 1px, transparent 1px 34px),
+    repeating-radial-gradient(circle at 72% 78%, rgb(52 211 153 / 0.05) 0 1px, transparent 1px 26px);
+  mask-image: radial-gradient(ellipse at 40% 50%, #000 20%, transparent 75%);
+}
+
+.grain {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.06;
+  mix-blend-mode: overlay;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fadeUp,
+  .overlayIn {
+    animation-duration: 1ms;
+  }
+
+  .beam,
+  .gradientText {
+    animation: none;
+  }
+
+  .tickerMask > * {
+    animation-play-state: paused !important;
+  }
+
+  .card {
+    transition: none;
+  }
+}
