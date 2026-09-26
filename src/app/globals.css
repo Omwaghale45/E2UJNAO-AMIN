@@ -63,6 +63,21 @@ body {
   }
 }
 
+@keyframes ndrf-radar-sweep {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ndrf-ticker {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
 .mapboxgl-popup-content {
   border-radius: 10px;
   padding: 10px 12px;
