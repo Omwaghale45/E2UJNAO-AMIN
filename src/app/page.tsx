@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import Map, { DEFAULT_VISIBILITY, type CategoryVisibility } from "@/components/Map";
@@ -9,10 +10,24 @@ import type { HazardEvent } from "@/data/hazards";
 import type { SelectedItem } from "@/types/selection";
 
 export default function Home() {
+  const router = useRouter();
+  const [authorized, setAuthorized] = useState(false);
   const [flyToTarget, setFlyToTarget] = useState<HazardEvent | null>(null);
   const [visibility, setVisibility] = useState<CategoryVisibility>(DEFAULT_VISIBILITY);
   const [selected, setSelected] = useState<SelectedItem | null>(null);
   const [heatmapDistrict, setHeatmapDistrict] = useState<string | null>(null);
+
+  useEffect(() => {
+    let signedIn = false;
+    try {
+      signedIn = sessionStorage.getItem("ndrf_session") === "1";
+    } catch {}
+    if (!signedIn) {
+      router.replace("/login");
+      return;
+    }
+    setAuthorized(true);
+  }, [router]);
 
   function handleSelectFromSearch(event: HazardEvent) {
     setFlyToTarget(event);
@@ -23,6 +38,10 @@ export default function Home() {
   function handleSelectDistrictHeatmap(districtId: string) {
     setHeatmapDistrict(districtId);
     setSelected(null);
+  }
+
+  if (!authorized) {
+    return <div className="h-screen w-screen bg-white" />;
   }
 
   return (
