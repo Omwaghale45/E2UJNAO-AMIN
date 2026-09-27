@@ -1,8 +1,7 @@
 "use client";
-// Server-only: maintains a single persistent MQTT connection and caches
-// the latest reading, so route handlers don't reconnect on every
-// request. Never import this from a "use client" file — import
-// mqtt-config.ts instead for the client-safe constants.
+// Browser-only: connects directly to the MQTT broker over WebSocket
+// (mosquitto's ws listener on 8083) and fans out the latest reading to
+// any subscribed React components. No Next.js API route in the loop.
 import mqtt, { type MqttClient } from "mqtt";
 import { MQTT_BROKER_URL, WEATHER_SENSOR_TOPIC } from "@/lib/mqtt-config";
 
@@ -17,80 +16,81 @@ export interface WeatherTelemetry {
   humidity: number;
 }
 
-interface TelemetryCache {
+export interface TelemetryCache {
   data: WeatherTelemetry | null;
   receivedAt: number | null;
   connected: boolean;
 }
 
-// Stored on the Node global object so the connection and cache survive
-// Next.js dev-server module reloads instead of reconnecting every time
-// this file is re-evaluated.
-declare global {
-  // eslint-disable-next-line no-var
-  var __weatherMqttClient: MqttClient | undefined;
-  // eslint-disable-next-line no-var
-  var __weatherTelemetryCache: TelemetryCache | undefined;
+type Listener = (cache: TelemetryCache) => void;
+
+const cache: TelemetryCache = {
+  data: null,
+  receivedAt: null,
+  connected: false,
+};
+
+const listeners = new Set<Listener>();
+let client: MqttClient | undefined;
+
+function notify() {
+  for (const listener of listeners) listener(cache);
 }
 
-function getCache(): TelemetryCache {
-  if (!global.__weatherTelemetryCache) {
-    global.__weatherTelemetryCache = {
-      data: null,
-      receivedAt: null,
-      connected: false,
-    };
-  }
-  return global.__weatherTelemetryCache;
+function ensureClient(): MqttClient {
+  if (client) return client;
+
+  client = mqtt.connect({
+    host: MQTT_BROKER_URL,
+    port: 8083,
+    protocol: "ws",
+    path: "/mqtt",
+  });
+
+  client.on("connect", () => {
+    cache.connected = true;
+    notify();
+    client?.subscribe(WEATHER_SENSOR_TOPIC, (err) => {
+      if (err) console.error("[mqtt] subscribe failed:", err);
+    });
+  });
+
+  client.on("reconnect", () => {
+    cache.connected = false;
+    notify();
+  });
+  client.on("close", () => {
+    cache.connected = false;
+    notify();
+  });
+  client.on("error", (err) => {
+    cache.connected = false;
+    notify();
+    console.error("[mqtt] client error:", err);
+  });
+
+  client.on("message", (topic, payload) => {
+    if (topic !== WEATHER_SENSOR_TOPIC) return;
+    try {
+      cache.data = JSON.parse(payload.toString()) as WeatherTelemetry;
+      cache.receivedAt = Date.now();
+      notify();
+    } catch (err) {
+      console.error("[mqtt] failed to parse payload:", err);
+    }
+  });
+
+  return client;
 }
 
-export function ensureWeatherMqttSubscription(): TelemetryCache {
-  const cache = getCache();
-
-  if (!global.__weatherMqttClient) {
-    const options: mqtt.IClientOptions = {
-      host: MQTT_BROKER_URL,
-      port: 8083,
-      protocol: "ws",
-    };
-    // const options: mqtt.IClientOptions = {
-    //   host: MQTT_BROKER_URL,
-    //   port: 1883,
-    //   protocol: "mqtt",
-    // };
-
-    const client = mqtt.connect(options);
-
-    client.on("connect", () => {
-      cache.connected = true;
-      client.subscribe(WEATHER_SENSOR_TOPIC, (err) => {
-        if (err) console.error("[mqtt] subscribe failed:", err);
-      });
-    });
-
-    client.on("reconnect", () => {
-      cache.connected = false;
-    });
-    client.on("close", () => {
-      cache.connected = false;
-    });
-    client.on("error", (err) => {
-      cache.connected = false;
-      console.error("[mqtt] client error:", err);
-    });
-
-    client.on("message", (topic, payload) => {
-      if (topic !== WEATHER_SENSOR_TOPIC) return;
-      try {
-        cache.data = JSON.parse(payload.toString()) as WeatherTelemetry;
-        cache.receivedAt = Date.now();
-      } catch (err) {
-        console.error("[mqtt] failed to parse payload:", err);
-      }
-    });
-
-    global.__weatherMqttClient = client;
-  }
-
-  return cache;
+// Subscribes to live weather telemetry, opening the shared broker
+// connection on first use. Fires immediately with the current cache,
+// then again on every update. Returns an unsubscribe function.
+export function subscribeWeatherTelemetry(listener: Listener): () => void {
+  ensureClient();
+  listeners.add(listener);
+  listener(cache);
+  return () => {
+    listeners.delete(listener);
+  };
 }

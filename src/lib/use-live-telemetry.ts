@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { WeatherTelemetry } from "@/lib/mqtt-client";
+import { subscribeWeatherTelemetry, type WeatherTelemetry } from "@/lib/mqtt-client";
 
 export interface LiveTelemetryState {
   data: WeatherTelemetry | null;
@@ -10,12 +10,9 @@ export interface LiveTelemetryState {
   loading: boolean;
 }
 
-const POLL_INTERVAL_MS = 5000;
-
-// Polls the server-side MQTT bridge (see src/app/api/telemetry) rather
-// than connecting to the broker directly — browsers can't open a raw
-// TCP/MQTT socket.
-export function useLiveTelemetry(endpoint: string): LiveTelemetryState {
+// Subscribes directly to the broker's WebSocket feed (see
+// src/lib/mqtt-client.ts) instead of polling a Next.js API route.
+export function useLiveTelemetry(): LiveTelemetryState {
   const [state, setState] = useState<LiveTelemetryState>({
     data: null,
     receivedAt: null,
@@ -24,32 +21,15 @@ export function useLiveTelemetry(endpoint: string): LiveTelemetryState {
   });
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function poll() {
-      try {
-        const res = await fetch(endpoint, { cache: "no-store" });
-        const json = await res.json();
-        if (cancelled) return;
-        setState({
-          data: json.data,
-          receivedAt: json.receivedAt,
-          connected: json.connected,
-          loading: false,
-        });
-      } catch {
-        if (cancelled) return;
-        setState((prev) => ({ ...prev, connected: false, loading: false }));
-      }
-    }
-
-    poll();
-    const interval = setInterval(poll, POLL_INTERVAL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [endpoint]);
+    return subscribeWeatherTelemetry((cache) => {
+      setState({
+        data: cache.data,
+        receivedAt: cache.receivedAt,
+        connected: cache.connected,
+        loading: false,
+      });
+    });
+  }, []);
 
   return state;
 }

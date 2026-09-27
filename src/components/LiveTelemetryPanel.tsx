@@ -2,7 +2,6 @@
 
 import { Radio } from "lucide-react";
 import { useLiveTelemetry } from "@/lib/use-live-telemetry";
-import { TELEMETRY_ENDPOINT } from "@/lib/mqtt-config";
 import type { WeatherTelemetry } from "@/lib/mqtt-client";
 
 const FIELDS: { key: keyof WeatherTelemetry; label: string; unit: string }[] = [
@@ -24,7 +23,7 @@ function formatAge(receivedAt: number | null): string {
 }
 
 export default function LiveTelemetryPanel() {
-  const { data, receivedAt, connected, loading } = useLiveTelemetry(TELEMETRY_ENDPOINT);
+  const { data, receivedAt, connected, loading } = useLiveTelemetry();
 
   return (
     <div className="mb-3 rounded-lg border border-zinc-200 p-2.5">
