@@ -42,8 +42,8 @@ function ensureClient(): MqttClient {
 
   client = mqtt.connect({
     host: MQTT_BROKER_URL,
-    port: 8083,
-    protocol: "ws",
+    port: 443,
+    protocol: "wss",
     path: "/mqtt",
   });
 
