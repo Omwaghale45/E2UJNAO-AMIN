@@ -1,3 +1,4 @@
+"use client";
 // Server-only: maintains a single persistent MQTT connection and caches
 // the latest reading, so route handlers don't reconnect on every
 // request. Never import this from a "use client" file — import
@@ -49,9 +50,14 @@ export function ensureWeatherMqttSubscription(): TelemetryCache {
   if (!global.__weatherMqttClient) {
     const options: mqtt.IClientOptions = {
       host: MQTT_BROKER_URL,
-      port: 1883,
-      protocol: "mqtt",
+      port: 8083,
+      protocol: "ws",
     };
+    // const options: mqtt.IClientOptions = {
+    //   host: MQTT_BROKER_URL,
+    //   port: 1883,
+    //   protocol: "mqtt",
+    // };
 
     const client = mqtt.connect(options);
 
