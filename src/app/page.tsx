@@ -42,9 +42,16 @@ const STATS = [
   { value: new Set(HAZARD_EVENTS.map(({ event }) => event.state)).size, label: "States covered" },
 ];
 
-const ARCHIVE = HAZARD_EVENTS.filter(({ event }) => event.date)
-  .sort((a, b) => (b.event.date ?? "").localeCompare(a.event.date ?? ""))
-  .slice(0, 16);
+const TEAM_NAME = "AlphaCraft";
+
+const TEAM_MEMBERS = [
+  "Atharva Kaplay",
+  "Dhruv Chourey",
+  "Jeenal Shah",
+  "Om Waghale",
+  "Sanyam Patel",
+  "Shalvi Sharma",
+];
 
 const LEGEND = [
   { label: "Flash flood", color: "#4285F4" },
@@ -253,7 +260,7 @@ export default function LoginPage() {
   const activeRole = ROLES.find((r) => r.id === role) ?? ROLES[0];
 
   useEffect(() => {
-    router.prefetch("/");
+    router.prefetch("/dashboard");
   }, [router]);
 
   useEffect(() => {
@@ -273,7 +280,7 @@ export default function LoginPage() {
       try {
         sessionStorage.setItem("ndrf_session", "1");
       } catch {}
-      router.push("/");
+      router.push("/dashboard");
     }, REDIRECT_MS);
     return () => {
       stageTimers.forEach(clearTimeout);
@@ -413,24 +420,20 @@ export default function LoginPage() {
         }`}
       >
         <div className="flex shrink-0 items-center border-r border-white/10 px-5 text-xs font-medium text-slate-300">
-          Event archive
+          Team {TEAM_NAME}
         </div>
         <div className={`${styles.tickerMask} relative flex-1 overflow-hidden py-2.5`}>
           <div className="flex w-max" style={{ animation: "ndrf-ticker 80s linear infinite" }}>
-            {[...ARCHIVE, ...ARCHIVE].map(({ event, kind }, i) => (
+            {[...TEAM_MEMBERS, ...TEAM_MEMBERS].map((name, i) => (
               <span
-                key={`${event.id}-${i}`}
+                key={`${name}-${i}`}
                 className="flex items-center gap-2 px-5 text-xs text-slate-500"
               >
                 <span
                   className="h-1.5 w-1.5 rounded-[1px]"
-                  style={{ background: kind === "flood" ? "#4285F4" : "#FBBC05" }}
+                  style={{ background: LOGO_LETTERS[i % LOGO_LETTERS.length].color }}
                 />
-                <span className="text-slate-300">{event.eventName}</span>
-                <span>
-                  {event.district}, {event.state}
-                </span>
-                <span className="tabular-nums">{event.date?.slice(0, 4)}</span>
+                <span className="text-slate-300">{name}</span>
               </span>
             ))}
           </div>
